@@ -1,6 +1,6 @@
 <!doctype html>
 <html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>
-<title>MR Flashing v5.1</title>
+<title>MR Flashing v5.2</title>
 <link rel='manifest' href='manifest.json'><meta name='theme-color' content='#0b5fff'>
 <style>
 body{margin:0;font-family:-apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial}
@@ -9,176 +9,137 @@ canvas{border:1px solid #999;touch-action:none;max-width:100%;background:#fff}
 .panel{display:flex;gap:8px;flex-wrap:wrap;padding:10px;border-bottom:1px solid #eee}
 label{display:flex;flex-direction:column;font-size:12px}
 input,select,button{padding:8px;border:1px solid #ccc;border-radius:6px;background:#fff}
-button{cursor:pointer}
-.pill{background:#f3f3f3;border:1px solid #ddd;border-radius:999px;padding:2px 6px}
-.gridbg{background:
-  linear-gradient(0deg, rgba(0,0,0,.06) 1px, transparent 1px),
-  linear-gradient(90deg, rgba(0,0,0,.06) 1px, transparent 1px);
-  background-size:24px 24px;}
-.badge{background:#d00;color:#fff;border-radius:12px;padding:2px 6px;font-size:12px}
+.gridbg{background:linear-gradient(0deg,rgba(0,0,0,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(0,0,0,.06) 1px,transparent 1px);background-size:24px 24px;}
 </style></head>
 <body>
-<header><strong>MR Flashing v5.1</strong></header>
+<header><strong>MR Flashing v5.2</strong></header>
 <div class='panel'>
-  <label>Colourbond<select id='colour'>
-    <option value='#ECEBE6'>Surfmist</option>
-    <option value='#2B2B2B'>Monument</option>
-    <option value='#4B4F46'>Woodland Grey</option>
-    <option value='#BFC1BC'>Shale Grey</option>
-  </select></label>
-  <label>Face<select id='face'><option value='left'>Left</option><option value='right'>Right</option></select></label>
-  <label>Scale(px/mm)<input id='scale' type='number' step='0.1' value='1'></label>
-  <label>Snap(px)<input id='snap' type='number' value='6'></label>
-  <button id='lock'>🔒 Lock</button>
-  <button id='undo'>Undo</button><button id='redo'>Redo</button>
-  <span class='pill'>Tap to add points • Double‑tap to finish • When 🔒, tap a length to edit</span>
+  <label>Zoom <input id='zoom' type='range' min='0.5' max='3' step='0.1' value='1'></label>
+  <label>Scale(px/mm) <input id='scale' type='number' step='0.1' value='1'></label>
+  <label>Snap(px) <input id='snap' type='number' value='6'></label>
+  <label>Face <select id='face'><option value='left'>Left</option><option value='right'>Right</option></select></label>
+  <label>Colourbond <select id='colour'><option value='#ECEBE6'>Surfmist</option><option value='#2B2B2B'>Monument</option><option value='#4B4F46'>Woodland Grey</option></select></label>
+  <button id='lock'>🔒 Lock</button><button id='undo'>Undo</button><button id='redo'>Redo</button>
 </div>
-<div style='padding:10px'>
-  <canvas id='c' class='gridbg' width='980' height='560'></canvas>
-</div>
+<div style='padding:10px'><canvas id='cv' class='gridbg' width='980' height='560'></canvas></div>
 <div class='panel'>
   <label>Seg #<input id='seg' type='number' value='0' min='0'></label>
   <label>Length (mm)<input id='segLen' type='number' value='0'></label>
-  <label>Angle (°)<input id='segAng' type='number' value='0' step='0.1'></label>
+  <label>Angle (°)<input id='segAng' type='number' value='0'></label>
   <button id='apply'>Apply</button>
 </div>
 <script>
-const cv=document.getElementById('c'),ctx=cv.getContext('2d');
-let pxPerMm=parseFloat(document.getElementById('scale').value)||1;
-let snap=parseInt(document.getElementById('snap').value)||0;
+const cv=document.getElementById('cv'),ctx=cv.getContext('2d');
+let Z=1, pxPerMm=1, snap=6; let locked=false;
+document.getElementById('zoom').oninput=e=>{Z=parseFloat(e.target.value||'1');draw()};
 document.getElementById('scale').onchange=e=>{pxPerMm=parseFloat(e.target.value||'1');draw()};
 document.getElementById('snap').onchange=e=>{snap=parseInt(e.target.value||'0')};
+document.getElementById('lock').onclick=()=>{locked=!locked;document.getElementById('lock').textContent=locked?'🔓 Unlock':'🔒 Lock'};
 
-let path=[],history=[],redo=[],drawing=false,locked=false,lastTap=0;
 const faceSel=document.getElementById('face'), colourSel=document.getElementById('colour');
 
+let path=[], drawing=false, history=[], redo=[]; let lastTap=0;
 function push(){history.push(JSON.stringify(path));if(history.length>200)history.shift();redo.length=0;}
 function undo(){if(history.length){redo.push(JSON.stringify(path));path=JSON.parse(history.pop());draw();}}
 function redoF(){if(redo.length){history.push(JSON.stringify(path));path=JSON.parse(redo.pop());draw();}}
-document.getElementById('undo').onclick=undo;
-document.getElementById('redo').onclick=redoF;
+document.getElementById('undo').onclick=undo; document.getElementById('redo').onclick=redoF;
 
-document.getElementById('lock').onclick=()=>{ locked=!locked; document.getElementById('lock').textContent = locked ? '🔓 Unlock' : '🔒 Lock'; };
-
-function pos(e){const r=cv.getBoundingClientRect();if(e.touches&&e.touches[0])return{x:e.touches[0].clientX-r.left,y:e.touches[0].clientY-r.top};return{x:(e.clientX||0)-r.left,y:(e.clientY||0)-r.top};}
-function snapP(p){if(!snap)return p;return{x:Math.round(p.x/snap)*snap,y:Math.round(p.y/snap)*snap};}
+function pos(e){const r=cv.getBoundingClientRect();const x=((e.touches?e.touches[0].clientX:e.clientX)-r.left)/Z;const y=((e.touches?e.touches[0].clientY:e.clientY)-r.top)/Z;return {x,y};}
+function snapP(p){if(!snap)return p;return {x:Math.round(p.x*snap)/snap,y:Math.round(p.y*snap)/snap};}
 
 function down(e){
   const p=pos(e);
   const now=Date.now();
-  if(locked){
-    selectSegmentAt(p);
-    e.preventDefault();return;
-  }
-  if(now-lastTap<300){drawing=false;}lastTap=now;
+  if(locked){ selectByScreen({x:p.x*Z,y:p.y*Z}); e.preventDefault(); return; }
+  if(now-lastTap<300){drawing=false;} lastTap=now;
   const sp=snapP(p);
-  if(!drawing){push();path=[sp];drawing=true;} else {push();path.push(sp);}
-  draw();e.preventDefault();
+  if(!drawing){push(); path=[sp]; drawing=true;} else {push(); path.push(sp);}
+  draw(); e.preventDefault();
 }
-function move(e){if(!drawing||!path.length||locked)return;const p=snapP(pos(e));path[path.length-1]=p;draw();e.preventDefault();}
-function up(e){e.preventDefault();}
+function move(e){ if(!drawing||!path.length||locked) return; path[path.length-1]=snapP(pos(e)); draw(); e.preventDefault(); }
+function up(e){ e.preventDefault(); }
 
-cv.addEventListener('pointerdown',down,{passive:false});cv.addEventListener('pointermove',move,{passive:false});cv.addEventListener('pointerup',up,{passive:false});
-cv.addEventListener('touchstart',down,{passive:false});cv.addEventListener('touchmove',move,{passive:false});cv.addEventListener('touchend',up,{passive:false});
-cv.addEventListener('mousedown',down);cv.addEventListener('mousemove',move);['mouseup','mouseleave'].forEach(ev=>cv.addEventListener(ev,up));
+cv.addEventListener('pointerdown',down,{passive:false}); cv.addEventListener('pointermove',move,{passive:false}); cv.addEventListener('pointerup',up,{passive:false});
+cv.addEventListener('touchstart',down,{passive:false}); cv.addEventListener('touchmove',move,{passive:false}); cv.addEventListener('touchend',up,{passive:false});
+cv.addEventListener('mousedown',down); cv.addEventListener('mousemove',move); ['mouseup','mouseleave'].forEach(ev=>cv.addEventListener(ev,up));
 
-function segs(){const s=[];for(let i=0;i<path.length-1;i++)s.push([path[i],path[i+1],i]);return s;}
+function segs(){const s=[]; for(let i=0;i<path.length-1;i++) s.push([path[i],path[i+1],i]); return s;}
+function norm180(a){a=((a%360)+360)%360; return a>180?360-a:a;} // 0..180
+function normal(ax,ay,bx,by){const dx=bx-ax,dy=by-ay; const L=Math.hypot(dx,dy)||1; return {x:-dy/L,y:dx/L};}
 
-function selectSegmentAt(p){
-  const S=segs();
-  let best=-1, bestd=1e9;
-  S.forEach(([a,b,i])=>{
-    const mid={x:(a.x+b.x)/2,y:(a.y+b.y)/2};
-    const d=Math.hypot(p.x-mid.x,p.y-mid.y);
-    if(d<bestd){bestd=d;best=i;}
-  });
-  if(best>-1 && bestd<28){
-    document.getElementById('seg').value=best;
-    refreshEditor();
-  }
+function selectByScreen(sp){
+  let best=-1,bd=1e9; const S=segs();
+  S.forEach(([a,b,i])=>{ const mid={x:(a.x+b.x)/2*Z,y:(a.y+b.y)/2*Z}; const d=Math.hypot(sp.x-mid.x, sp.y-mid.y); if(d<bd){bd=d;best=i;} });
+  if(best>-1 && bd<30){ document.getElementById('seg').value=best; refreshEditor(); }
 }
 
 function refreshEditor(){
   const S=segs();
-  const i=Math.min(parseInt(document.getElementById('seg').value||'0'),Math.max(0,S.length-1));
-  if(!S.length){document.getElementById('segLen').value=0;document.getElementById('segAng').value=0;return;}
-  const a=S[i][0],b=S[i][1];
-  const dx=b.x-a.x,dy=-(b.y-a.y);
+  if(!S.length){ document.getElementById('segLen').value=0; document.getElementById('segAng').value=0; return; }
+  let i=Math.min(parseInt(document.getElementById('seg').value||'0'), S.length-1);
+  const a=S[i][0], b=S[i][1]; const dx=b.x-a.x, dy=-(b.y-a.y);
   document.getElementById('segLen').value=(Math.hypot(dx,dy)/pxPerMm).toFixed(0);
-  document.getElementById('segAng').value=((Math.atan2(dy,dx)*180/Math.PI+360)%360).toFixed(1);
+  document.getElementById('segAng').value=norm180(Math.atan2(dy,dx)*180/Math.PI).toFixed(1);
   draw(i);
 }
 document.getElementById('seg').onchange=refreshEditor;
 
 document.getElementById('apply').onclick=()=>{
   const S=segs(); if(!S.length) return;
-  const i=Math.min(parseInt(document.getElementById('seg').value||'0'),S.length-1);
-  const a=path[i];
-  const len=parseFloat(document.getElementById('segLen').value||'0')*pxPerMm;
-  const ang=parseFloat(document.getElementById('segAng').value||'0')*Math.PI/180;
-  push();
-  path[i+1]={x:a.x+len*Math.cos(ang),y:a.y-len*Math.sin(ang)};
-  draw(i);
+  let i=Math.min(parseInt(document.getElementById('seg').value||'0'), S.length-1);
+  const a=path[i]; const len=(parseFloat(document.getElementById('segLen').value)||0)*pxPerMm;
+  const ang=parseFloat(document.getElementById('segAng').value||0)*Math.PI/180;
+  path[i+1]={x:a.x+len*Math.cos(ang),y:a.y-len*Math.sin(ang)}; draw(i);
 };
 
-function normal(ax,ay,bx,by){const dx=bx-ax,dy=by-ay;const L=Math.hypot(dx,dy)||1;return{x:-dy/L,y:dx/L};}
 function cornerAngle(prev,pt,next){
   const v1={x:prev.x-pt.x,y:prev.y-pt.y}, v2={x:next.x-pt.x,y:next.y-pt.y};
-  const dot=v1.x*v2.x+v1.y*v2.y; const l1=Math.hypot(v1.x,v1.y), l2=Math.hypot(v2.x,v2.y);
-  if(l1*l2===0) return 0;
-  let ang = Math.acos(Math.max(-1,Math.min(1,dot/(l1*l2)))); // radians interior
-  return Math.round(ang*180/Math.PI);
+  const dot=v1.x*v2.x+v1.y*v2.y, l1=Math.hypot(v1.x,v1.y), l2=Math.hypot(v2.x,v2.y);
+  if(l1*l2===0) return 0; const a=Math.acos(Math.max(-1,Math.min(1,dot/(l1*l2)))); return Math.round(Math.min(a*180/Math.PI,180));
 }
 
-function draw(highlightIdx=-1){
+function draw(hi=-1){
   ctx.clearRect(0,0,cv.width,cv.height);
   if(!path.length) return;
-  // polyline
-  ctx.strokeStyle='#000'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(path[0].x,path[0].y);
-  for(let i=1;i<path.length;i++) ctx.lineTo(path[i].x,path[i].y);
-  ctx.stroke();
 
-  // coloured face offset
-  const face=faceSel.value; const hex=colourSel.value;
-  ctx.strokeStyle=hex; ctx.lineWidth=6; ctx.globalAlpha=.35;
+  // draw geometry scaled
+  ctx.save(); ctx.scale(Z,Z);
+
+  ctx.strokeStyle='#000'; ctx.lineWidth=2/ Z;
+  ctx.beginPath(); ctx.moveTo(path[0].x,path[0].y); for(let i=1;i<path.length;i++) ctx.lineTo(path[i].x,path[i].y); ctx.stroke();
+
+  // coloured face
+  const face=faceSel.value, hex=colourSel.value;
+  ctx.strokeStyle=hex; ctx.lineWidth=6/ Z; ctx.globalAlpha=.35;
   for(let i=0;i<path.length-1;i++){ const a=path[i],b=path[i+1]; const n=normal(a.x,a.y,b.x,b.y); const off=face==='left'?6:-6; ctx.beginPath(); ctx.moveTo(a.x+n.x*off,a.y+n.y*off); ctx.lineTo(b.x+n.x*off,b.y+n.y*off); ctx.stroke(); }
   ctx.globalAlpha=1;
 
-  // segment labels + selection hit zones
+  // points
+  ctx.fillStyle='#000'; for(const p of path){ ctx.beginPath(); ctx.arc(p.x,p.y,3/ Z,0,Math.PI*2); ctx.fill(); }
+
+  ctx.restore(); // labels in screen space (constant size)
+
+  // segment labels
+  ctx.font='12px system-ui,-apple-system';
   for(let i=0;i<path.length-1;i++){
-    const a=path[i],b=path[i+1];
-    const dx=b.x-a.x, dy=-(b.y-a.y);
-    const len=Math.round(Math.hypot(dx,dy)/pxPerMm);
-    const ang=((Math.atan2(dy,dx)*180/Math.PI+360)%360).toFixed(0);
-    const midx=(a.x+b.x)/2, midy=(a.y+b.y)/2;
-    // label
-    ctx.fillStyle = (i===highlightIdx)?'#fff':'#fff';
-    ctx.strokeStyle = (i===highlightIdx)?'#d00':'#d00';
-    ctx.lineWidth=1.5;
-    const txt=len+' mm';
-    ctx.font='12px system-ui,-apple-system';
-    const w=ctx.measureText(txt).width+12, h=18;
-    ctx.beginPath(); ctx.roundRect(midx-w/2, midy-h/2, w, h, 9); ctx.fillStyle='#d00'; ctx.fill();
+    const a=path[i],b=path[i+1]; const dx=b.x-a.x, dy=-(b.y-a.y);
+    const L=Math.hypot(dx,dy)/pxPerMm; const A=norm180(Math.atan2(dy,dx)*180/Math.PI).toFixed(0);
+    const midx=(a.x+b.x)/2*Z, midy=(a.y+b.y)/2*Z;
+    const txt=Math.round(L)+' mm'; const w=ctx.measureText(txt).width+12, h=18;
+    ctx.fillStyle='#d00'; roundRect(ctx,midx-w/2, midy-h/2, w, h, 9); ctx.fill();
     ctx.fillStyle='#fff'; ctx.fillText(txt, midx - w/2 + 6, midy + 4);
-    // store hit zone (as small circle) in a temp array if needed; here we compute on click via nearest midpoint
   }
 
-  // vertices & corner angles
-  ctx.fillStyle='#000';
-  for(let i=0;i<path.length;i++){
-    const p=path[i];
-    ctx.beginPath(); ctx.arc(p.x,p.y,3,0,Math.PI*2); ctx.fill();
-    if(i>0 && i<path.length-1){
-      const ang=cornerAngle(path[i-1], p, path[i+1]);
-      // small red badge near corner
-      ctx.font='12px system-ui,-apple-system'; const txt=ang+'°';
-      const bx=p.x+8, by=p.y-8;
-      const w=ctx.measureText(txt).width+10,h=18;
-      ctx.beginPath(); ctx.roundRect(bx,by-h/2,w,h,9); ctx.fillStyle='#d00'; ctx.fill();
-      ctx.fillStyle='#fff'; ctx.fillText(txt, bx+5, by+4);
-    }
+  // corner angles badges (0..180), constant size
+  for(let i=1;i<path.length-1;i++){
+    const p=path[i]; const ang=cornerAngle(path[i-1],p,path[i+1]); const text=ang+'°';
+    const bx=p.x*Z+8, by=p.y*Z-8; const w=ctx.measureText(text).width+10, h=18;
+    ctx.fillStyle='#d00'; roundRect(ctx,bx,by-h/2,w,h,9); ctx.fill();
+    ctx.fillStyle='#fff'; ctx.fillText(text,bx+5,by+4);
   }
 }
+
+function roundRect(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);}
 
 draw();
 </script>
