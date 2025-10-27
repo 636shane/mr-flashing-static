@@ -1,10 +1,10 @@
 {
-  "name": "MR Flashing",
+  "name": "MR Flashing \u2013 Matrix Roofing",
   "short_name": "MR Flashing",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#0b5fff",
+  "theme_color": "#003A75",
   "icons": [
     {
       "src": "icons/icon-192.png",
