@@ -1,6 +1,6 @@
 <!doctype html>
 <html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>
-<title>MR Flashing v5.3</title>
+<title>MR Flashing v5.4</title>
 <link rel='manifest' href='manifest.json'><meta name='theme-color' content='#0b5fff'>
 <style>
 body{margin:0;font-family:-apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial}
@@ -14,10 +14,12 @@ input,select,button{padding:8px;border:1px solid #ccc;border-radius:6px;backgrou
   linear-gradient(0deg, rgba(0,0,0,.06) 1px, transparent 1px),
   linear-gradient(90deg, rgba(0,0,0,.06) 1px, transparent 1px);
   background-size:24px 24px;}
+.inline-input{position:absolute; z-index:10; transform:translate(-50%,-50%);}
+.inline-input input{padding:6px 8px;font-size:14px;border:2px solid #d00;border-radius:8px;min-width:90px;text-align:center}
 .badge{background:#d00;color:#fff;border-radius:12px;padding:2px 6px;font-size:12px}
 </style></head>
 <body>
-<header><strong>MR Flashing v5.3</strong></header>
+<header><strong>MR Flashing v5.4</strong></header>
 
 <div class='panel'>
   <label>Zoom <input id='zoom' type='range' min='0.5' max='3' step='0.1' value='1'></label>
@@ -26,10 +28,13 @@ input,select,button{padding:8px;border:1px solid #ccc;border-radius:6px;backgrou
   <label>Face <select id='face'><option value='left'>Left</option><option value='right'>Right</option></select></label>
   <label>Colourbond <select id='colour'><option value='#ECEBE6'>Surfmist</option><option value='#2B2B2B'>Monument</option><option value='#4B4F46'>Woodland Grey</option></select></label>
   <button id='lock'>🔒 Lock</button><button id='undo'>Undo</button><button id='redo'>Redo</button>
-  <span class='pill'>Tap to draw • Double‑tap to finish • When 🔒 tap a length or a corner angle to edit</span>
+  <span class='pill'>Tap to draw • Double‑tap to finish • When 🔒 tap a length or corner angle → type → Enter</span>
 </div>
 
-<div style='padding:10px'><canvas id='cv' class='gridbg' width='980' height='560'></canvas></div>
+<div style='padding:10px; position:relative'>
+  <canvas id='cv' class='gridbg' width='980' height='560'></canvas>
+  <div id='overlay'></div>
+</div>
 
 <div class='panel'>
   <label>Seg #<input id='seg' type='number' value='0' min='0'></label>
@@ -38,7 +43,7 @@ input,select,button{padding:8px;border:1px solid #ccc;border-radius:6px;backgrou
   <button id='apply'>Apply segment</button>
   <div style='width:24px'></div>
   <label>Corner #<input id='corner' type='number' value='1' min='1'></label>
-  <label>Corner Angle (°)<input id='cornerAng' type='number' value='90'></label>
+  <label>Corner Angle (°)<input id='cornerAng' type='number' value='90' step='0.1'></label>
   <button id='applyCorner'>Apply corner</button>
 </div>
 
@@ -78,29 +83,89 @@ cv.addEventListener('mousedown',down); cv.addEventListener('mousemove',move); ['
 function segs(){const s=[]; for(let i=0;i<path.length-1;i++) s.push([path[i],path[i+1],i]); return s;}
 function norm180(a){a=((a%360)+360)%360; return a>180?360-a:a;} // 0..180
 function normal(ax,ay,bx,by){const dx=bx-ax,dy=by-ay; const L=Math.hypot(dx,dy)||1; return {x:-dy/L,y:dx/L};}
-function atan2d(y,x){return Math.atan2(y,x)*180/Math.PI;}
+
+const overlay=document.getElementById('overlay');
+function clearInline(){ overlay.innerHTML=''; }
+function showInline(screenX, screenY, value, onEnter){
+  clearInline();
+  const wrap=document.createElement('div'); wrap.className='inline-input'; wrap.style.left=screenX+'px'; wrap.style.top=screenY+'px';
+  const input=document.createElement('input'); input.value=value; wrap.appendChild(input);
+  overlay.appendChild(wrap); input.focus(); input.select();
+  input.addEventListener('keydown', (ev)=>{
+    if(ev.key==='Enter'){ onEnter(parseFloat(input.value)); clearInline(); draw(); }
+    if(ev.key==='Escape'){ clearInline(); draw(); }
+  });
+}
 
 function pickAtScreen(sp){
-  let bestKind=null,bestIndex=-1, bestd=1e9;
-  // check midpoints (segments)
+  // pick nearest among: segment badges midpoints and corner chips
+  let bestKind=null,bestIndex=-1, bestd=1e9, bestPt=null;
+  // segments
   segs().forEach(([a,b,i])=>{
-    const m={x:(a.x+b.x)/2*Z, y:(a.y+b.y)/2*Z};
-    const d=Math.hypot(sp.x-m.x, sp.y-m.y);
-    if(d<bestd){bestd=d;bestKind='seg';bestIndex=i;}
+    const midx=(a.x+b.x)/2*Z, midy=(a.y+b.y)/2*Z;
+    const d=Math.hypot(sp.x-midx, sp.y-midy);
+    if(d<bestd){bestd=d;bestKind='seg';bestIndex=i;bestPt={x:midx,y=midy};}
   });
-  // check vertices (corners 1..n-2)
+  // corners
   for(let i=1;i<path.length-1;i++){
-    const p=path[i]; const d=Math.hypot(sp.x-p.x*Z, sp.y-p.y*Z);
-    if(d<bestd){bestd=d;bestKind='corner';bestIndex=i;}
+    const p=path[i]; const bx=p.x*Z+8, by=p.y*Z-8;
+    const d=Math.hypot(sp.x-bx, sp.y-by);
+    if(d<bestd){bestd=d;bestKind='corner';bestIndex=i;bestPt={x:bx,y:by};}
   }
-  if(bestd<30){
+  if(bestd<40){
     if(bestKind==='seg'){
-      document.getElementById('seg').value=bestIndex; refreshEditor();
+      const a=path[bestIndex], b=path[bestIndex+1];
+      const dx=b.x-a.x, dy=b.y-a.y;
+      const lengthMm=(Math.hypot(dx,dy)/pxPerMm);
+      showInline(bestPt.x, bestPt.y, Math.round(lengthMm), (newLen)=>{
+        const ang=Math.atan2(-dy, dx); // convert to our standard
+        const L=(newLen||0)*pxPerMm;
+        path[bestIndex+1]={x:a.x+L*Math.cos(ang), y:a.y-L*Math.sin(ang)};
+      });
     }else{
-      document.getElementById('corner').value=bestIndex; refreshCornerEditor();
+      const current=cornerAngle(path[bestIndex-1],path[bestIndex],path[bestIndex+1]);
+      showInline(bestPt.x, bestPt.y, current.toFixed(1), (newAng)=>{
+        applyCorner(bestIndex, parseFloat(newAng||current));
+      });
     }
   }
 }
+
+function cornerAngle(prev,pt,next){
+  const v1={x:prev.x-pt.x,y:prev.y-pt.y}, v2={x:next.x-pt.x,y:next.y-pt.y};
+  const dot=v1.x*v2.x+v1.y*v2.y, l1=Math.hypot(v1.x,v1.y), l2=Math.hypot(v2.x,v2.y);
+  if(l1*l2===0) return 0;
+  let ang = Math.acos(Math.max(-1,Math.min(1,dot/(l1*l2)))); // radians
+  return +(Math.min(ang*180/Math.PI,180)).toFixed(1);
+}
+
+function applyCorner(i, desiredDeg){
+  if(path.length<3) return;
+  i=Math.max(1, Math.min(i, path.length-2));
+  const desired=Math.max(0, Math.min(180, desiredDeg)) * Math.PI/180;
+
+  const Pm=path[i-1], P=path[i], Pn=path[i+1];
+  const vPrev={x:P.x-Pm.x, y:P.y-Pm.y};
+  const thetaPrev=Math.atan2(vPrev.y, vPrev.x);
+  const delta = Math.PI - desired; // turn angle
+
+  // choose sign that keeps smaller arc (both are small here); pick one closest to current
+  const cur=Math.atan2(Pn.y-P.y, Pn.x-P.x);
+  const opt1=thetaPrev + delta, opt2=thetaPrev - delta;
+  const d1=Math.abs(Math.atan2(Math.sin(cur-opt1), Math.cos(cur-opt1)));
+  const d2=Math.abs(Math.atan2(Math.sin(cur-opt2), Math.cos(cur-opt2)));
+  const theta = d1<=d2? opt1 : opt2;
+
+  const L=Math.hypot(Pn.x-P.x, Pn.y-P.y);
+  path[i+1] = { x: P.x + L*Math.cos(theta), y: P.y + L*Math.sin(theta) };
+  draw();
+}
+
+document.getElementById('applyCorner').onclick=()=>{
+  const i=Math.max(1, Math.min(parseInt(document.getElementById('corner').value||'1'), path.length-2));
+  const ang=parseFloat(document.getElementById('cornerAng').value||'90');
+  applyCorner(i, ang);
+};
 
 function refreshEditor(){
   const S=segs();
@@ -108,7 +173,9 @@ function refreshEditor(){
   let i=Math.min(parseInt(document.getElementById('seg').value||'0'), S.length-1);
   const a=S[i][0], b=S[i][1]; const dx=b.x-a.x, dy=b.y-a.y;
   document.getElementById('segLen').value=(Math.hypot(dx,dy)/pxPerMm).toFixed(0);
-  document.getElementById('segAng').value=norm180(atan2d(-dy,dx)).toFixed(1);
+  // angle for segment: show 0..180 relative to +X
+  const baseDeg = (Math.atan2(-dy,dx)*180/Math.PI);
+  document.getElementById('segAng').value = ( ((baseDeg%360)+360)%360 > 180 ? 360-(((baseDeg%360)+360)%360) : ((baseDeg%360)+360)%360 ).toFixed(1);
   draw(i);
 }
 document.getElementById('seg').onchange=refreshEditor;
@@ -117,49 +184,12 @@ document.getElementById('apply').onclick=()=>{
   const S=segs(); if(!S.length) return;
   let i=Math.min(parseInt(document.getElementById('seg').value||'0'), S.length-1);
   const a=path[i]; const len=(parseFloat(document.getElementById('segLen').value)||0)*pxPerMm;
-  const ang=parseFloat(document.getElementById('segAng').value||0)*Math.PI/180;
+  const angDeg=parseFloat(document.getElementById('segAng').value||0);
+  const ang=angDeg*Math.PI/180;
   path[i+1]={x:a.x+len*Math.cos(ang),y:a.y-len*Math.sin(ang)}; draw(i);
 };
 
-function cornerAngle(prev,pt,next){
-  const v1={x:prev.x-pt.x,y:prev.y-pt.y}, v2={x:next.x-pt.x,y:next.y-pt.y};
-  const dot=v1.x*v2.x+v1.y*v2.y, l1=Math.hypot(v1.x,v1.y), l2=Math.hypot(v2.x,v2.y);
-  if(l1*l2===0) return 0; const a=Math.acos(Math.max(-1,Math.min(1,dot/(l1*l2)))); return Math.round(Math.min(a*180/Math.PI,180));
-}
-
-function refreshCornerEditor(){
-  if(path.length<3){ document.getElementById('cornerAng').value=0; return; }
-  let i=Math.max(1, Math.min(parseInt(document.getElementById('corner').value||'1'), path.length-2));
-  const ang=cornerAngle(path[i-1], path[i], path[i+1]);
-  document.getElementById('cornerAng').value=ang;
-  draw(); // highlight will be evident via badge
-}
-document.getElementById('corner').onchange=refreshCornerEditor;
-
-document.getElementById('applyCorner').onclick=()=>{
-  if(path.length<3) return;
-  let i=Math.max(1, Math.min(parseInt(document.getElementById('corner').value||'1'), path.length-2));
-  const desired=parseFloat(document.getElementById('cornerAng').value||'90'); // 0..180
-  const A = Math.max(0, Math.min(180, desired)) * Math.PI/180;
-
-  const Pm=path[i-1], P=path[i], Pn=path[i+1];
-  const vPrev={x:P.x-Pm.x, y:P.y-Pm.y}; // from prev to corner
-  const thetaPrev=Math.atan2(vPrev.y, vPrev.x); // model coords (down is +y)
-  const delta = Math.PI - A; // turn angle magnitude
-
-  // keep current turn side by picking sign that gives closer to current next direction
-  const thetaNextCur=Math.atan2(Pn.y-P.y, Pn.x-P.x);
-  const thetaOpt1=thetaPrev + delta, thetaOpt2=thetaPrev - delta;
-  const pick = (ang1, ang2)=> ( Math.atan2(mathSin(thetaNextCur-ang1), mathCos(thetaNextCur-ang1))**2 <= Math.atan2(mathSin(thetaNextCur-ang2), mathCos(thetaNextCur-ang2))**2 ? ang1 : ang2 );
-  function mathSin(x){return Math.sin(x)}; function mathCos(x){return Math.cos(x)};
-  const theta = pick(thetaOpt1, thetaOpt2);
-
-  const L = Math.hypot(Pn.x-P.x, Pn.y-P.y); // keep length
-  path[i+1] = { x: P.x + L*Math.cos(theta), y: P.y + L*Math.sin(theta) };
-  draw();
-};
-
-function draw(hi=-1){
+function draw(){
   ctx.clearRect(0,0,cv.width,cv.height);
   if(!path.length) return;
 
@@ -178,41 +208,42 @@ function draw(hi=-1){
   // points
   ctx.fillStyle='#000'; for(const p of path){ ctx.beginPath(); ctx.arc(p.x,p.y,3/ Z,0,Math.PI*2); ctx.fill(); }
 
-  ctx.restore();
-
-  // segment labels (screen-space, constant size)
-  ctx.font='12px system-ui,-apple-system';
-  for(let i=0;i<path.length-1;i++){
-    const a=path[i],b=path[i+1]; const L=Math.hypot(b.x-a.x,b.y-a.y)/pxPerMm;
-    const midx=(a.x+b.x)/2*Z, midy=(a.y+b.y)/2*Z; const txt=Math.round(L)+' mm';
-    const w=ctx.measureText(txt).width+12,h=18;
-    ctx.fillStyle='#d00'; roundRect(ctx,midx-w/2, midy-h/2, w, h, 9); ctx.fill();
-    ctx.fillStyle='#fff'; ctx.fillText(txt, midx - w/2 + 6, midy + 4);
-  }
-
-  // corner angle badges + arc (screen-space)
+  // corner arcs: always smallest
+  const r=20; // model pixels; line width scaled inversely
+  ctx.strokeStyle='#555'; ctx.lineWidth=1/ Z; ctx.setLineDash([4/ Z,3/ Z]);
   for(let i=1;i<path.length-1;i++){
     const pm=path[i-1], p=path[i], pn=path[i+1];
-    const ang=cornerAngle(pm,p,pn);
-    // Arc visualization (in model coords then scaled)
-    ctx.save(); ctx.scale(Z,Z); ctx.strokeStyle='#555'; ctx.setLineDash([4,3]); ctx.lineWidth=1/ Z;
-    const r=20; // px (model units)
-    const a1=Math.atan2(pm.y-p.y, pm.x-p.x);
-    const a2=Math.atan2(pn.y-p.y, pn.x-p.x);
-    // draw smaller arc between a1 and a2
-    let start=a1, end=a2;
-    // normalize to go shortest way
-    while(end-start>Math.PI) start+=2*Math.PI;
-    while(start-end>Math.PI) end+=2*Math.PI;
-    ctx.beginPath(); ctx.arc(p.x,p.y,r, start, end); ctx.stroke();
-    ctx.setLineDash([]); ctx.restore();
-
-    // Badge
-    const bx=p.x*Z+8, by=p.y*Z-8; const text=ang+'°';
-    const w=ctx.measureText(text).width+10, h=18;
-    ctx.fillStyle='#d00'; roundRect(ctx,bx,by-h/2,w,h,9); ctx.fill();
-    ctx.fillStyle='#fff'; ctx.fillText(text,bx+5,by+4);
+    let a1=Math.atan2(pm.y-p.y, pm.x-p.x);
+    let a2=Math.atan2(pn.y-p.y, pn.x-p.x);
+    // Normalize to draw the smaller arc
+    let diff=a2-a1;
+    while(diff>Math.PI) { a2-=2*Math.PI; diff=a2-a1; }
+    while(diff<-Math.PI){ a2+=2*Math.PI; diff=a2-a1; }
+    ctx.beginPath(); ctx.arc(p.x,p.y,r, a1, a2); ctx.stroke();
   }
+  ctx.setLineDash([]);
+  ctx.restore();
+
+  // labels (screen space; constant size)
+  ctx.font='12px system-ui,-apple-system';
+  // lengths
+  for(let i=0;i<path.length-1;i++){
+    const a=path[i],b=path[i+1]; const L=Math.hypot(b.x-a.x,b.y-a.y)/pxPerMm;
+    const midx=(a.x+b.x)/2*Z, midy=(a.y+b.y)/2*Z;
+    drawBadge(midx, midy, Math.round(L)+' mm');
+  }
+  // corner angles
+  for(let i=1;i<path.length-1;i++){
+    const ang=cornerAngle(path[i-1],path[i],path[i+1]).toFixed(1);
+    const bx=path[i].x*Z+8, by=path[i].y*Z-8;
+    drawBadge(bx, by, ang+'°');
+  }
+}
+
+function drawBadge(cx,cy,text){
+  const w=ctx.measureText(text).width+12, h=18;
+  ctx.fillStyle='#d00'; roundRect(ctx,cx-w/2, cy-h/2, w, h, 9); ctx.fill();
+  ctx.fillStyle='#fff'; ctx.fillText(text, cx - w/2 + 6, cy + 4);
 }
 
 function roundRect(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);}
