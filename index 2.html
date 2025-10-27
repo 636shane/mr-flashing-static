@@ -1,0 +1,233 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MR Flashing v6</title>
+<style>
+body{margin:0;font-family:-apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial}
+header{padding:10px 12px;border-bottom:1px solid #ddd;display:flex;justify-content:space-between;align-items:center}
+.tool{padding:6px 10px;border:1px solid #ccc;border-radius:8px;background:#fafafa;cursor:pointer}
+.selected{outline:2px solid #e22}
+.panel{display:flex;gap:8px;flex-wrap:wrap;padding:10px;border-bottom:1px solid #eee}
+label{display:flex;flex-direction:column;font-size:12px}
+input,select,button{padding:8px;border:1px solid #ccc;border-radius:6px;background:#fff}
+canvas{border:1px solid #999;touch-action:none;max-width:100%;background:#fff}
+.gridbg{background:linear-gradient(0deg,rgba(0,0,0,.06) 1px, transparent 1px),
+                 linear-gradient(90deg,rgba(0,0,0,.06) 1px, transparent 1px);
+        background-size:24px 24px;}
+/* inline editor */
+.inline{position:absolute;transform:translate(-50%,-50%);z-index:5}
+.inline input{padding:6px 8px;border:2px solid #d00;border-radius:8px;font-size:14px;min-width:90px;text-align:center}
+</style></head>
+<body>
+<header>
+  <strong>MR Flashing v6</strong>
+  <div>
+    <button id="modeDraw" class="tool selected">✏️ Draw</button>
+    <button id="modeSelect" class="tool">☝️ Select</button>
+    <button id="undo" class="tool">↩︎ Undo</button>
+    <button id="redo" class="tool">↪︎ Redo</button>
+  </div>
+</header>
+
+<div class="panel">
+  <label>Zoom <input id="zoom" type="range" min="0.5" max="3" step="0.1" value="1"></label>
+  <label>Scale (px/mm) <input id="scale" type="number" step="0.1" value="1"></label>
+  <label>Face <select id="face"><option value="left">Left</option><option value="right">Right</option></select></label>
+  <label>Colourbond <select id="colour">
+    <option value="#ECEBE6">Surfmist</option>
+    <option value="#2B2B2B">Monument</option>
+    <option value="#4B4F46">Woodland Grey</option>
+    <option value="#BFC1BC">Shale Grey</option>
+  </select></label>
+</div>
+
+<div style="padding:10px;position:relative">
+  <canvas id="cv" class="gridbg" width="980" height="560"></canvas>
+  <div id="overlay"></div>
+</div>
+
+<script>
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+let Z=1, pxPerMm=1;
+document.getElementById('zoom').oninput=e=>{Z=parseFloat(e.target.value||'1'); draw();};
+document.getElementById('scale').onchange=e=>{pxPerMm=parseFloat(e.target.value||'1'); draw();};
+const faceSel=document.getElementById('face'), colourSel=document.getElementById('colour');
+
+let mode='draw';
+document.getElementById('modeDraw').onclick=()=>{mode='draw';toggleModes();};
+document.getElementById('modeSelect').onclick=()=>{mode='select';toggleModes();};
+function toggleModes(){
+  document.getElementById('modeDraw').classList.toggle('selected', mode==='draw');
+  document.getElementById('modeSelect').classList.toggle('selected', mode==='select');
+  draw();
+}
+
+let path=[], drawing=false, history=[], redoStack=[], dragIdx=-1;
+function push(){history.push(JSON.stringify(path)); if(history.length>200) history.shift(); redoStack.length=0;}
+document.getElementById('undo').onclick=()=>{if(history.length){redoStack.push(JSON.stringify(path)); path=JSON.parse(history.pop()); draw();}};
+document.getElementById('redo').onclick=()=>{if(redoStack.length){history.push(JSON.stringify(path)); path=JSON.parse(redoStack.pop()); draw();}};
+
+function pos(e){const r=cv.getBoundingClientRect();return {x:((e.touches?e.touches[0].clientX:e.clientX)-r.left)/Z, y:((e.touches?e.touches[0].clientY:e.clientY)-r.top)/Z};}
+
+cv.addEventListener('pointerdown', e=>{
+  const p=pos(e);
+  if(mode==='select'){
+    // drag nearest handle
+    let best=-1, bd=1e9;
+    for(let i=0;i<path.length;i++){ const d=Math.hypot(p.x-path[i].x, p.y-path[i].y); if(d<bd){bd=d; best=i;} }
+    if(bd<12){ dragIdx=best; push(); }
+    else { pickAtScreen({x:e.offsetX, y:e.offsetY}); }
+  }else{
+    push();
+    if(!drawing){ path=[p]; drawing=true; } else { path.push(p); }
+  }
+  draw();
+},{passive:false});
+
+cv.addEventListener('pointermove', e=>{
+  if(dragIdx>-1){ path[dragIdx]=pos(e); draw(); }
+},{passive:false});
+
+cv.addEventListener('pointerup', e=>{ dragIdx=-1; }, {passive:false});
+
+// Double-tap/click to finish drawing
+cv.addEventListener('dblclick', e=>{ drawing=false; }, {passive:false});
+
+function segs(){const s=[]; for(let i=0;i<path.length-1;i++) s.push([path[i],path[i+1],i]); return s;}
+function normal(ax,ay,bx,by){const dx=bx-ax,dy=by-ay; const L=Math.hypot(dx,dy)||1; return {x:-dy/L,y:dx/L};}
+function interior(pm,p,pn){
+  const v1={x:pm.x-p.x,y:pm.y-p.y}, v2={x:pn.x-p.x,y:pn.y-p.y};
+  const dot=v1.x*v2.x+v1.y*v2.y, l1=Math.hypot(v1.x,v1.y), l2=Math.hypot(v2.x,v2.y);
+  const a=Math.acos(Math.max(-1,Math.min(1,dot/(l1*l2))))||0; return +(Math.min(a*180/Math.PI,180)).toFixed(1);
+}
+
+const overlay=document.getElementById('overlay');
+function clearInline(){ overlay.innerHTML=''; }
+function showInline(screenX, screenY, value, onEnter){
+  clearInline();
+  const wrap=document.createElement('div'); wrap.className='inline';
+  wrap.style.left=screenX+'px'; wrap.style.top=screenY+'px';
+  const input=document.createElement('input'); input.type='number'; input.step='0.1'; input.value=value;
+  wrap.appendChild(input); overlay.appendChild(wrap);
+  input.focus(); input.select();
+  input.addEventListener('keydown', ev=>{
+    if(ev.key==='Enter'){ onEnter(parseFloat(input.value)); clearInline(); draw(); }
+    if(ev.key==='Escape'){ clearInline(); draw(); }
+  });
+}
+
+// tap badges to edit
+function pickAtScreen(sp){
+  let bestKind=null, bestIndex=-1, bestd=1e9, bestPt=null;
+  // segments
+  segs().forEach(([a,b,i])=>{
+    const mx=(a.x+b.x)/2*Z, my=(a.y+b.y)/2*Z;
+    const d=Math.hypot(sp.x-mx, sp.y-my);
+    if(d<bestd){bestd=d; bestKind='seg'; bestIndex=i; bestPt={x:mx,y:my};}
+  });
+  // corners (angle chips sit near corner)
+  for(let i=1;i<path.length-1;i++){
+    // place chip near arc midpoint for picking; approximate at corner offset
+    const p=path[i]; const bx=p.x*Z+10, by=p.y*Z-10;
+    const d=Math.hypot(sp.x-bx, sp.y-by);
+    if(d<bestd){bestd=d; bestKind='corner'; bestIndex=i; bestPt={x:bx,y:by};}
+  }
+  if(bestd<40){
+    if(bestKind==='seg'){
+      const a=path[bestIndex], b=path[bestIndex+1];
+      const dx=b.x-a.x, dy=b.y-a.y;
+      const lengthMm=Math.hypot(dx,dy)/pxPerMm;
+      showInline(bestPt.x, bestPt.y, Math.round(lengthMm), newLen=>{
+        const ang=Math.atan2(-(b.y-a.y),(b.x-a.x));
+        const L=(newLen||0)*pxPerMm;
+        path[bestIndex+1] = {x:a.x+L*Math.cos(ang), y:a.y-L*Math.sin(ang)};
+      });
+    }else{
+      const ang=interior(path[bestIndex-1],path[bestIndex],path[bestIndex+1]);
+      showInline(bestPt.x, bestPt.y, ang, newAng=>{ applyCorner(bestIndex, newAng); });
+    }
+  }
+}
+
+function applyCorner(i, desiredDeg){
+  if(path.length<3) return;
+  i=Math.max(1, Math.min(i, path.length-2));
+  const Pm=path[i-1], P=path[i], Pn=path[i+1];
+  const desired=Math.max(0, Math.min(180, desiredDeg))*Math.PI/180;
+  const vPrev={x:P.x-Pm.x, y:P.y-Pm.y};
+  const thetaPrev=Math.atan2(vPrev.y, vPrev.x);
+  const delta=Math.PI - desired; // turn angle magnitude
+  const cur=Math.atan2(Pn.y-P.y, Pn.x-P.x);
+  const opt1=thetaPrev+delta, opt2=thetaPrev-delta;
+  const d1=Math.abs(Math.atan2(Math.sin(cur-opt1), Math.cos(cur-opt1)));
+  const d2=Math.abs(Math.atan2(Math.sin(cur-opt2), Math.cos(cur-opt2)));
+  const theta=d1<=d2? opt1 : opt2;
+  const L=Math.hypot(Pn.x-P.x, Pn.y-P.y);
+  path[i+1] = { x:P.x + L*Math.cos(theta), y:P.y + L*Math.sin(theta) };
+  draw();
+}
+
+function draw(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  if(!path.length) return;
+
+  // scaled model
+  ctx.save(); ctx.scale(Z,Z);
+
+  // base polyline
+  ctx.strokeStyle='#000'; ctx.lineWidth=2/Z;
+  ctx.beginPath(); ctx.moveTo(path[0].x,path[0].y); for(let i=1;i<path.length;i++) ctx.lineTo(path[i].x,path[i].y); ctx.stroke();
+
+  // coloured face offset
+  const face=faceSel.value, hex=colourSel.value;
+  ctx.strokeStyle=hex; ctx.lineWidth=6/Z; ctx.globalAlpha=.35;
+  for(let i=0;i<path.length-1;i++){ const a=path[i], b=path[i+1]; const n=normal(a.x,a.y,b.x,b.y); const off=face==='left'?6:-6;
+    ctx.beginPath(); ctx.moveTo(a.x+n.x*off, a.y+n.y*off); ctx.lineTo(b.x+n.x*off, b.y+n.y*off); ctx.stroke(); }
+  ctx.globalAlpha=1;
+
+  // handles (only in select mode)
+  if(mode==='select'){
+    ctx.fillStyle='#007aff'; ctx.strokeStyle='#fff'; ctx.lineWidth=1/Z;
+    for(const p of path){ ctx.beginPath(); ctx.arc(p.x,p.y,4/Z,0,Math.PI*2); ctx.fill(); ctx.stroke(); }
+  }
+
+  // arcs (smallest) + place label midpoint later in screen space
+  const r=20; ctx.setLineDash([4/Z,3/Z]); ctx.strokeStyle='#555'; ctx.lineWidth=1/Z;
+  const arcMidpoints=[];
+  for(let i=1;i<path.length-1;i++){
+    const pm=path[i-1], p=path[i], pn=path[i+1];
+    let a1=Math.atan2(pm.y-p.y, pm.x-p.x), a2=Math.atan2(pn.y-p.y, pn.x-p.x);
+    let start=a1, end=a2, diff=end-start;
+    while(diff>Math.PI){ start+=2*Math.PI; diff=end-start; }
+    while(diff<-Math.PI){ end+=2*Math.PI; diff=end-start; }
+    ctx.beginPath(); ctx.arc(p.x,p.y,r, start, end); ctx.stroke();
+    const mid=start + diff/2;
+    arcMidpoints.push({x:(p.x+Math.cos(mid)*(r+10))*Z, y:(p.y+Math.sin(mid)*(r+10))*Z, ang:interior(pm,p,pn)});
+  }
+  ctx.setLineDash([]);
+  ctx.restore();
+
+  // segment length badges (screen space)
+  ctx.font='12px system-ui,-apple-system';
+  for(let i=0;i<path.length-1;i++){
+    const a=path[i], b=path[i+1];
+    const L=Math.hypot(b.x-a.x,b.y-a.y)/pxPerMm;
+    const mx=(a.x+b.x)/2*Z, my=(a.y+b.y)/2*Z;
+    badge(mx,my,Math.round(L)+' mm');
+  }
+
+  // corner angle badges at arc midpoint (screen space)
+  for(const m of arcMidpoints){
+    badge(m.x, m.y, m.ang.toFixed(1)+'°');
+  }
+}
+
+function badge(cx,cy,text){
+  const w=ctx.measureText(text).width+12, h=18;
+  ctx.fillStyle='#d00'; roundRect(cx-w/2, cy-h/2, w, h, 9); ctx.fill();
+  ctx.fillStyle='#fff'; ctx.fillText(text, cx - w/2 + 6, cy + 4);
+}
+function roundRect(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);}
+
+draw();
+</script>
+</body></html>
