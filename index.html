@@ -1,315 +1,64 @@
 <!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MR Flashing</title>
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#0b5fff">
+<html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>
+<title>MR Flashing v5</title>
+<link rel='manifest' href='manifest.json'>
+<meta name='theme-color' content='#0b5fff'>
 <style>
-  *{box-sizing:border-box}
-  body{margin:0;font-family:-apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial}
-  header{display:flex;gap:12px;align-items:center;border-bottom:1px solid #ddd;padding:12px;flex-wrap:wrap}
-  nav a{margin-right:10px;color:#0b5fff;text-decoration:none} nav a.active{text-decoration:underline}
-  main{padding:12px}
-  .grid{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
-  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-  input,select,button{padding:8px;border:1px solid #ccc;border-radius:6px;background:#fff}
-  button{cursor:pointer}
-  .panel{border:1px solid #ddd;border-radius:8px;padding:10px}
-  .hidden{display:none}
-  canvas{touch-action:none;background-image: linear-gradient(0deg, rgba(0,0,0,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,.05) 1px, transparent 1px); background-size: 20px 20px;}
-  .pill{padding:2px 6px;border-radius:999px;background:#f3f3f3;border:1px solid #ddd;font-size:12px}
-</style>
-<script>
-const COLORBOND = [{"name":"Surfmist","hex":"#ECEBE6"},{"name":"Shale Grey","hex":"#BFC1BC"},{"name":"Dune","hex":"#C2B8A6"},{"name":"Paperbark","hex":"#DCC9A3"},{"name":"Classic Cream","hex":"#F5E6B7"},{"name":"Windspray","hex":"#B3BBB7"},{"name":"Basalt","hex":"#7B7E7E"},{"name":"Monument","hex":"#2B2B2B"},{"name":"Woodland Grey","hex":"#4B4F46"},{"name":"Jasper","hex":"#6E4F3A"},{"name":"Manor Red","hex":"#6B2C2C"},{"name":"Pale Eucalypt","hex":"#8C9C79"},{"name":"Cottage Green","hex":"#2E5141"},{"name":"Deep Ocean","hex":"#2C3E55"},{"name":"Night Sky","hex":"#151517"},{"name":"Ironstone","hex":"#434A57"},{"name":"Wallaby","hex":"#8D8F8B"},{"name":"Gully","hex":"#7A6E5F"},{"name":"Evening Haze","hex":"#CDC2A2"},{"name":"Cove","hex":"#7C6C52"},{"name":"Mangrove","hex":"#5B6352"},{"name":"Terrain","hex":"#7A3E28"}];
-</script>
-</head>
+body{margin:0;font-family:-apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial}
+header{padding:10px;border-bottom:1px solid #ddd}
+canvas{border:1px solid #999;touch-action:none;max-width:100%}
+.panel{display:flex;gap:8px;flex-wrap:wrap;padding:10px;border-bottom:1px solid #eee}
+label{display:flex;flex-direction:column;font-size:12px}
+input,select,button{padding:8px;border:1px solid #ccc;border-radius:6px}
+button{background:#fff}
+.pill{background:#f3f3f3;border:1px solid #ddd;border-radius:999px;padding:2px 6px}
+.gridbg{background:
+  linear-gradient(0deg, rgba(0,0,0,.06) 1px, transparent 1px),
+  linear-gradient(90deg, rgba(0,0,0,.06) 1px, transparent 1px);
+  background-size:24px 24px;}
+</style></head>
 <body>
-<header>
-  <strong>MR Flashing</strong>
-  <nav>
-    <a href="#draw" id="tab-draw" class="active">Draw</a>
-    <a href="#templates" id="tab-templates">Templates</a>
-    <a href="#orders" id="tab-orders">Orders</a>
-    <a href="#suppliers" id="tab-suppliers">Suppliers</a>
-    <a href="#settings" id="tab-settings">Settings</a>
-  </nav>
-</header>
-
-<main>
-  <!-- Draw Page -->
-  <section id="page-draw">
-    <h1>Draw Flashing</h1>
-    <div class="panel">
-      <div class="row">
-        <label>Name <input id="name" value="Flashing"></label>
-        <label>Length (mm) <input id="length" type="number" value="2400" min="1"></label>
-        <label>Gauge <input id="gauge" value="0.55"></label>
-        <label>Scale (px per mm) <input id="scale" type="number" step="0.1" value="1.0"></label>
-        <label>Snap (px) <input id="snap" type="number" step="1" value="5"></label>
-        <label>Colourbond
-          <select id="colour"></select>
-        </label>
-        <label>Coloured side
-          <select id="face">
-            <option value="left">Outside (left)</option>
-            <option value="right">Outside (right)</option>
-          </select>
-        </label>
-      </div>
-      <div class="row" style="margin-top:8px">
-        <button id="startPath">Start Path</button>
-        <button id="finishPath">Finish</button>
-        <button id="undoBtn">Undo</button>
-        <button id="redoBtn">Redo</button>
-        <button id="clearBtn">Clear</button>
-        <span class="pill">Tip: tap to add points, double‑tap to finish</span>
-      </div>
-    </div>
-
-    <div class="row" style="margin:10px 0">
-      <canvas id="canvas" width="980" height="480" style="border:1px solid #aaa;max-width:100%"></canvas>
-    </div>
-
-    <div class="panel">
-      <h3 style="margin:4px 0">Selected Segment</h3>
-      <div class="row">
-        <label>Segment #
-          <input id="segIndex" type="number" value="0" min="0">
-        </label>
-        <label>Length (mm)
-          <input id="segLen" type="number" step="1" value="0">
-        </label>
-        <label>Angle (deg)
-          <input id="segAng" type="number" step="0.1" value="0">
-        </label>
-        <button id="applySeg">Apply</button>
-        <span class="pill">0° is to the right, 90° up</span>
-      </div>
-    </div>
-
-    <div class="row" style="margin-top:10px">
-      <button id="saveTemplate">Save as Template</button>
-    </div>
-  </section>
-
-  <!-- Templates -->
-  <section id="page-templates" class="hidden">
-    <h1>Templates</h1>
-    <div id="templatesList" class="grid"></div>
-  </section>
-
-  <!-- Orders -->
-  <section id="page-orders" class="hidden">
-    <h1>Order</h1>
-    <div id="ordersList"></div>
-    <div id="orderActions" class="row hidden" style="margin-top:12px">
-      <button id="sendEmail">Send to Supplier (email)</button>
-      <button id="exportPDF">Export PDF</button>
-      <button id="clearOrder">Clear Order</button>
-      <div style="margin-left:auto;font-weight:600">Total: $<span id="orderTotal">0.00</span></div>
-    </div>
-  </section>
-
-  <!-- Suppliers -->
-  <section id="page-suppliers" class="hidden">
-    <h1>Suppliers</h1>
-    <div class="row">
-      <label>Name <input id="supName" value="My Supplier"></label>
-      <label>Email <input id="supEmail" value="orders@example.com"></label>
-      <button id="addSupplier">Add Supplier</button>
-    </div>
-    <div id="suppliersList" style="margin-top:12px"></div>
-  </section>
-
-  <!-- Settings -->
-  <section id="page-settings" class="hidden">
-    <h1>Settings</h1>
-    <p>Base rate is used for pricing: price = (length in metres) × base rate × gauge factor (0.55 → 1.0, ≥0.7 → 1.2).</p>
-    <label>Base Rate ($/m): <input id="rate" type="number" step="0.1" value="25"></label>
-  </section>
-</main>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<header><strong>MR Flashing v5</strong></header>
+<div class='panel'>
+  <label>Colourbond<select id='colour'><option value='#ECEBE6'>Surfmist</option><option value='#2B2B2B'>Monument</option><option value='#4B4F46'>Woodland Grey</option></select></label>
+  <label>Face<select id='face'><option value='left'>Left</option><option value='right'>Right</option></select></label>
+  <label>Scale(px/mm)<input id='scale' type='number' step='0.1' value='1'></label>
+  <label>Snap(px)<input id='snap' type='number' value='6'></label>
+  <button id='undo'>Undo</button><button id='redo'>Redo</button><span class='pill'>Double‑tap to finish</span>
+</div>
+<div style='padding:10px'>
+  <canvas id='c' class='gridbg' width='980' height='520'></canvas>
+</div>
+<div class='panel'>
+  <label>Seg #<input id='seg' type='number' value='0' min='0'></label>
+  <label>Length (mm)<input id='segLen' type='number' value='0'></label>
+  <label>Angle (°)<input id='segAng' type='number' value='0' step='0.1'></label>
+  <button id='apply'>Apply</button>
+</div>
 <script>
-// ---------------- Nav ----------------
-function show(tab){ 
-  document.querySelectorAll('main section').forEach(s=>s.classList.add('hidden')); 
-  document.getElementById('page-'+tab).classList.remove('hidden'); 
-  document.querySelectorAll('nav a').forEach(a=>a.classList.remove('active')); 
-  document.getElementById('tab-'+tab).classList.add('active'); 
-  if(tab==='templates') renderTemplates(); 
-  if(tab==='orders') renderOrders(); 
-  if(tab==='suppliers') renderSuppliers(); 
-}
-window.addEventListener('hashchange', ()=> show((location.hash||'#draw').slice(1)));
-show((location.hash||'#draw').slice(1));
-
-// ---------------- Store ----------------
-const store = {
-  get(){ return JSON.parse(localStorage.getItem('mr-flashing-store-v4') || '{"flashings":[],"order":[],"suppliers":[],"defaultSupplierId":null,"ratePerM":25}'); },
-  set(v){ localStorage.setItem('mr-flashing-store-v4', JSON.stringify(v)); },
-};
-
-// ---------------- Colour dropdown ----------------
-const colourSelect = document.getElementById('colour');
-(COLORBOND||[]).forEach(c=>{ const o=document.createElement('option'); o.value=c.hex; o.textContent=c.name; o.style.background=c.hex; colourSelect.appendChild(o); });
-if(COLORBOND.length) colourSelect.value = COLORBOND[0].hex;
-
-// ---------------- Drawing ----------------
-const canvas = document.getElementById('canvas');
-const ctx = canvas.getContext('2d');
-ctx.lineWidth = 2; ctx.lineCap='round'; ctx.lineJoin='round';
-
-let pxPerMm = parseFloat(document.getElementById('scale').value)||1;
-let snap = parseInt(document.getElementById('snap').value)||0;
-document.getElementById('scale').onchange = e=>{ pxPerMm = parseFloat(e.target.value||'1'); draw(); };
-document.getElementById('snap').onchange = e=>{ snap = parseInt(e.target.value||'0'); };
-
-let path = []; // points [{x,y}]
-let history = [];
-let redo = [];
-
-function pushHistory(){ history.push(JSON.stringify(path)); if(history.length>200) history.shift(); redo.length=0; }
-function undo(){ if(history.length){ redo.push(JSON.stringify(path)); path = JSON.parse(history.pop()); draw(); } }
-function redoAction(){ if(redo.length){ history.push(JSON.stringify(path)); path = JSON.parse(redo.pop()); draw(); } }
-document.getElementById('undoBtn').onclick=undo;
-document.getElementById('redoBtn').onclick=redoAction;
-
-function snapPt(p){ if(!snap) return p; return { x: Math.round(p.x/snap)*snap, y: Math.round(p.y/snap)*snap }; }
-
-let drawing=false;
-function posFromEvent(e){ const r = canvas.getBoundingClientRect(); if(e.touches && e.touches[0]) return {x:e.touches[0].clientX-r.left, y:e.touches[0].clientY-r.top}; return {x:(e.clientX||0)-r.left, y:(e.clientY||0)-r.top}; }
-
-function startPath(){ if(path.length){ pushHistory(); } path=[]; draw(); drawing=true; }
-function finishPath(){ drawing=false; draw(); }
-document.getElementById('startPath').onclick = ()=>{ startPath(); };
-document.getElementById('finishPath').onclick = ()=>{ finishPath(); };
-document.getElementById('clearBtn').onclick = ()=>{ pushHistory(); path=[]; draw(); };
-
-let lastTap=0;
-function handleDown(e){ const now=Date.now(); if(now-lastTap<300){ finishPath(); } lastTap=now; const p=snapPt(posFromEvent(e)); if(!drawing) { drawing=true; pushHistory(); path=[p]; } else { pushHistory(); path.push(p); } draw(); e.preventDefault(); }
-function handleMove(e){ if(!drawing || path.length===0) return; const p=snapPt(posFromEvent(e)); path[path.length-1]=p; draw(); e.preventDefault(); }
-function handleUp(e){ e.preventDefault(); }
-
-canvas.addEventListener('pointerdown', handleDown, {passive:false});
-canvas.addEventListener('pointermove', handleMove, {passive:false});
-canvas.addEventListener('pointerup', handleUp, {passive:false});
-canvas.addEventListener('touchstart', handleDown, {passive:false});
-canvas.addEventListener('touchmove', handleMove, {passive:false});
-canvas.addEventListener('touchend', handleUp, {passive:false});
-canvas.addEventListener('mousedown', handleDown);
-canvas.addEventListener('mousemove', handleMove);
-['mouseup','mouseleave'].forEach(ev=>canvas.addEventListener(ev, handleUp));
-
-// --- segment editor ---
-function segs(){ const s=[]; for(let i=0;i<path.length-1;i++){ const a=path[i], b=path[i+1]; s.push([a,b]); } return s; }
-function redrawEditor(){ const S=segs(); document.getElementById('segIndex').max = Math.max(0, S.length-1); const i=parseInt(document.getElementById('segIndex').value||'0'); if(S.length===0){ document.getElementById('segLen').value=0; document.getElementById('segAng').value=0; return; } const AB = S[Math.min(i,S.length-1)]; const a=AB[0], b=AB[1]; const dx=b.x-a.x, dy=-(b.y-a.y); const lenMm = Math.sqrt(dx*dx+dy*dy)/pxPerMm; const ang = (Math.atan2(dy,dx)*180/Math.PI+360)%360; document.getElementById('segLen').value = lenMm.toFixed(0); document.getElementById('segAng').value = ang.toFixed(1); }
-document.getElementById('segIndex').onchange=redrawEditor;
-
-document.getElementById('applySeg').onclick = ()=>{
-  const i = Math.min(parseInt(document.getElementById('segIndex').value||'0'), path.length-2);
-  if(i<0 || path.length<2) return;
-  const len = parseFloat(document.getElementById('segLen').value||'0') * pxPerMm;
-  const ang = parseFloat(document.getElementById('segAng').value||'0') * Math.PI/180;
-  const a = path[i];
-  const nx = a.x + len * Math.cos(ang);
-  const ny = a.y - len * Math.sin(ang);
-  pushHistory();
-  path[i+1] = snapPt({x:nx, y:ny});
-  draw();
-};
-
-// --- draw helpers ---
-function normal(ax,ay,bx,by){ const dx=bx-ax, dy=by-ay; const L=Math.hypot(dx,dy)||1; return {x:-dy/L, y:dx/L}; }
-
-function draw(){
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  if(path.length){
-    ctx.strokeStyle = '#000'; ctx.lineWidth=2;
-    ctx.beginPath(); ctx.moveTo(path[0].x, path[0].y);
-    for(let i=1;i<path.length;i++){ ctx.lineTo(path[i].x, path[i].y); }
-    ctx.stroke();
-
-    // coloured face highlight
-    const face = document.getElementById('face').value; const hex = document.getElementById('colour').value;
-    ctx.strokeStyle = hex; ctx.lineWidth = 6; ctx.globalAlpha = 0.35;
-    for(let i=0;i<path.length-1;i++){
-      const a=path[i], b=path[i+1];
-      const n = normal(a.x,a.y,b.x,b.y);
-      const off = face==='left' ? 6 : -6;
-      ctx.beginPath(); ctx.moveTo(a.x + n.x*off, a.y + n.y*off); ctx.lineTo(b.x + n.x*off, b.y + n.y*off); ctx.stroke();
-    }
-    ctx.globalAlpha = 1;
-
-    // points + labels
-    ctx.fillStyle='#000';
-    for(let idx=0; idx<path.length; idx++){ const p=path[idx]; ctx.beginPath(); ctx.arc(p.x,p.y,3,0,Math.PI*2); ctx.fill();
-      if(idx<path.length-1){ const a=p, b=path[idx+1]; const dx=b.x-a.x, dy=-(b.y-a.y); const lenMm=(Math.hypot(dx,dy)/pxPerMm).toFixed(0); const ang=((Math.atan2(dy,dx)*180/Math.PI+360)%360).toFixed(0); const midx=(a.x+b.x)/2, midy=(a.y+b.y)/2; ctx.fillStyle='#d00'; ctx.font='12px system-ui, -apple-system, sans-serif'; ctx.fillText(lenMm+'mm / '+ang+'°', midx+6, midy-6); ctx.fillStyle='#000'; }
-    }
-  }
-  redrawEditor();
-}
-
-draw();
-
-// Save template (keeps preview + metadata)
-document.getElementById('saveTemplate').onclick = ()=>{
-  if(path.length<2){ alert('Draw at least one segment first.'); return; }
-  const dataUrl = canvas.toDataURL('image/png');
-  const s = store.get();
-  const tpl = { id: Date.now().toString(), name: document.getElementById('name').value||'Flashing', image: dataUrl, qty:1, notes:'', length_mm: parseInt(document.getElementById('length').value||'0'), colour: document.getElementById('colour').value, gauge: document.getElementById('gauge').value, face: document.getElementById('face').value, pxPerMm, path };
-  s.flashings.unshift(tpl); store.set(s);
-  alert('Saved as template. See Templates tab.');
-};
-
-// Templates
-function renderTemplates(){
-  const s = store.get(); const el = document.getElementById('templatesList'); el.innerHTML='';
-  if(s.flashings.length===0){ el.innerHTML='<p>No templates yet—draw and save first.</p>'; return; }
-  s.flashings.forEach(f=>{
-    const d=document.createElement('div'); d.className='panel';
-    d.innerHTML = `<img src="${f.image}" alt="${f.name}" style="width:100%;height:140px;object-fit:contain;background:#fafafa">
-    <div style="margin-top:6;font-size:13;opacity:.85"><div><strong>${f.name}</strong></div>
-    <div>Gauge: ${f.gauge}</div></div>
-    <div style="display:flex;gap:8;justify-content:flex-end;margin-top:8">
-      <button data-act="add">Add to Order</button>
-    </div>`;
-    d.querySelector('[data-act="add"]').onclick = ()=>{ const s2=store.get(); const item={...f, id: f.id+'-order-'+Date.now()}; s2.order = [item, ...s2.order]; store.set(s2); alert('Added to order'); };
-    el.appendChild(d);
-  });
-}
-
-// Orders
-function priceFor(o, rate){ const lengthM=(o.length_mm||0)/1000; const gf=parseFloat(o.gauge||'0.55')>=0.7?1.2:1.0; return +(lengthM*rate*gf*(o.qty||1)).toFixed(2); }
-function renderOrders(){ const s=store.get(); const cont=document.getElementById('ordersList'); cont.innerHTML=''; let total=0; s.order.forEach(o=> total+=priceFor(o,s.ratePerM||25)); document.getElementById('orderTotal').textContent=total.toFixed(2); document.getElementById('orderActions').classList.toggle('hidden', s.order.length===0);
-  s.order.forEach(o=>{ const row=document.createElement('div'); row.className='row'; row.style='border-bottom:1px solid #eee;padding:8px 0;align-items:center';
-    row.innerHTML=`<img src="${o.image}" class="thumb" style="width:120px;height:90px"><div style="flex:1">
-      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))">
-        <strong style="grid-column:1/-1">${o.name}</strong>
-        <label>Qty <input data-k="qty" type="number" min="1" value="${o.qty||1}"></label>
-        <label>Length (mm) <input data-k="length_mm" type="number" min="1" value="${o.length_mm||0}"></label>
-        <label>Colour <input data-k="colour" value="${o.colour||''}"></label>
-        <label>Gauge <input data-k="gauge" value="${o.gauge||''}"></label>
-        <input data-k="notes" placeholder="Notes" value="${o.notes||''}" style="grid-column:1/-1">
-      </div></div>
-      <button data-act="remove">Remove</button>`;
-    row.querySelectorAll('input').forEach(inp=>{ inp.onchange=()=>{ const k=inp.dataset.k; const s2=store.get(); const idx=s2.order.findIndex(i=>i.id===o.id); s2.order[idx][k] = (k==='qty'||k==='length_mm')? parseInt(inp.value||'0'): inp.value; store.set(s2); renderOrders(); };});
-    row.querySelector('[data-act="remove"]').onclick=()=>{ const s2=store.get(); s2.order=s2.order.filter(i=>i.id!==o.id); store.set(s2); renderOrders(); };
-    cont.appendChild(row);
-  });
-}
-document.getElementById('clearOrder').onclick=()=>{ const s=store.get(); s.order=[]; store.set(s); renderOrders(); };
-
-document.getElementById('sendEmail').onclick=()=>{ const s=store.get(); const sup=s.suppliers.find(x=>x.id===s.defaultSupplierId)||{}; const lines=s.order.map((o,i)=>`${i+1}. ${o.name} x${o.qty} — ${o.length_mm}mm, ${o.colour}, ${o.gauge}`).join('%0D%0A'); const body=`MR Flashing Order:%0D%0A%0D%0A${lines}%0D%0ATotal: $${document.getElementById('orderTotal').textContent}`; location.href=`mailto:${sup.email||''}?subject=MR Flashing Order&body=${body}`; };
-
-document.getElementById('exportPDF').onclick=()=>{ const {{ jsPDF }} = window.jspdf; const s=store.get(); const doc=new jsPDF({unit:'pt',format:'a4'}); let y=40; doc.setFontSize(16); doc.text('MR Flashing — Order',40,y); y+=24; s.order.forEach((o,i)=>{ doc.setFontSize(12); doc.text(`${i+1}. ${o.name}  x${o.qty}  • ${o.length_mm}mm  • ${o.colour}  • ${o.gauge}`,40,y); y+=16; if(o.notes){ doc.text('Notes: '+o.notes,60,y); y+=16; } if(o.image){ try{ doc.addImage(o.image,'PNG',60,y,180,90); y+=100; }catch(e){} } const tot=(function(){ const lengthM=(o.length_mm||0)/1000; const rate=s.ratePerM||25; const gf=parseFloat(o.gauge||'0.55')>=0.7?1.2:1.0; return +(lengthM*rate*gf*(o.qty||1)).toFixed(2); })(); doc.text('Line total: $'+tot.toFixed(2),60,y); y+=24; if(y>760){ doc.addPage(); y=40; } }); const total=parseFloat(document.getElementById('orderTotal').textContent||'0'); doc.setFontSize(14); doc.text('TOTAL: $'+total.toFixed(2),40,y+10); doc.save('MR-Flashing-Order.pdf'); };
-
-// Suppliers
-function renderSuppliers(){ const s=store.get(); const list=document.getElementById('suppliersList'); list.innerHTML=''; if(s.suppliers.length===0){ list.innerHTML='<p>No suppliers yet.</p>'; } s.suppliers.forEach(sp=>{ const div=document.createElement('div'); div.className='row'; div.style='padding:6px 0;border-bottom:1px solid #eee;align-items:center'; div.innerHTML=`<div style="flex:1"><strong>${sp.name}</strong> — ${sp.email}</div><button data-act="default">${s.defaultSupplierId===sp.id?'Default':'Make Default'}</button><button data-act="remove">Remove</button>`; div.querySelector('[data-act="default"]').onclick=()=>{ const s2=store.get(); s2.defaultSupplierId=sp.id; store.set(s2); renderSuppliers(); }; div.querySelector('[data-act="remove"]').onclick=()=>{ const s2=store.get(); s2.suppliers=s2.suppliers.filter(x=>x.id!==sp.id); if(s2.defaultSupplierId===sp.id) s2.defaultSupplierId=null; store.set(s2); renderSuppliers(); }; list.appendChild(div); }); }
-document.getElementById('addSupplier').onclick = ()=>{ const s=store.get(); const sp={ id:Date.now().toString(), name:document.getElementById('supName').value, email:document.getElementById('supEmail').value }; s.suppliers.unshift(sp); if(!s.defaultSupplierId) s.defaultSupplierId=sp.id; store.set(s); renderSuppliers(); };
-
-document.getElementById('rate').onchange = e=>{ const s=store.get(); s.ratePerM=parseFloat(e.target.value||'25'); store.set(s); renderOrders(); };
+const cv=document.getElementById('c'),ctx=cv.getContext('2d');
+let pxPerMm=parseFloat(document.getElementById('scale').value)||1;
+let snap=parseInt(document.getElementById('snap').value)||0;
+document.getElementById('scale').onchange=e=>{pxPerMm=parseFloat(e.target.value||'1');draw()};
+document.getElementById('snap').onchange=e=>{snap=parseInt(e.target.value||'0')};
+let path=[],history=[],redo=[];let drawing=false;let lastTap=0;
+function push(){history.push(JSON.stringify(path));if(history.length>200)history.shift();redo.length=0;}
+function undo(){if(history.length){redo.push(JSON.stringify(path));path=JSON.parse(history.pop());draw();}}
+function redoF(){if(redo.length){history.push(JSON.stringify(path));path=JSON.parse(redo.pop());draw();}}
+document.getElementById('undo').onclick=undo;document.getElementById('redo').onclick=redoF;
+function pos(e){const r=cv.getBoundingClientRect();if(e.touches&&e.touches[0])return{x:e.touches[0].clientX-r.left,y:e.touches[0].clientY-r.top};return{x:(e.clientX||0)-r.left,y:(e.clientY||0)-r.top};}
+function snapP(p){if(!snap)return p;return{x:Math.round(p.x/snap)*snap,y:Math.round(p.y/snap)*snap};}
+function down(e){const now=Date.now();if(now-lastTap<300){drawing=false;}lastTap=now;const p=snapP(pos(e));if(!drawing){push();path=[p];drawing=true;}else{push();path.push(p);}draw();e.preventDefault();}
+function move(e){if(!drawing||!path.length)return;const p=snapP(pos(e));path[path.length-1]=p;draw();e.preventDefault();}
+function up(e){e.preventDefault();}
+cv.addEventListener('pointerdown',down,{passive:false});cv.addEventListener('pointermove',move,{passive:false});cv.addEventListener('pointerup',up,{passive:false});
+cv.addEventListener('touchstart',down,{passive:false});cv.addEventListener('touchmove',move,{passive:false});cv.addEventListener('touchend',up,{passive:false});
+cv.addEventListener('mousedown',down);cv.addEventListener('mousemove',move);['mouseup','mouseleave'].forEach(ev=>cv.addEventListener(ev,up));
+function segs(){const s=[];for(let i=0;i<path.length-1;i++)s.push([path[i],path[i+1]]);return s;}
+function refreshEditor(){const S=segs();const i=Math.min(parseInt(document.getElementById('seg').value||'0'),Math.max(0,S.length-1));if(!S.length){document.getElementById('segLen').value=0;document.getElementById('segAng').value=0;return;}const a=S[i][0],b=S[i][1];const dx=b.x-a.x,dy=-(b.y-a.y);document.getElementById('segLen').value=(Math.hypot(dx,dy)/pxPerMm).toFixed(0);document.getElementById('segAng').value=((Math.atan2(dy,dx)*180/Math.PI+360)%360).toFixed(1);}
+document.getElementById('seg').onchange=refreshEditor;
+document.getElementById('apply').onclick=()=>{const S=segs();if(!S.length)return;const i=Math.min(parseInt(document.getElementById('seg').value||'0'),S.length-1);const a=path[i];const len=parseFloat(document.getElementById('segLen').value||'0')*pxPerMm;const ang=parseFloat(document.getElementById('segAng').value||'0')*Math.PI/180;push();path[i+1]={x:a.x+len*Math.cos(ang),y:a.y-len*Math.sin(ang)};draw();};
+function normal(ax,ay,bx,by){const dx=bx-ax,dy=by-ay;const L=Math.hypot(dx,dy)||1;return{x:-dy/L,y:dx/L};}
+function draw(){ctx.clearRect(0,0,cv.width,cv.height);if(!path.length)return;ctx.strokeStyle='#000';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(path[0].x,path[0].y);for(let i=1;i<path.length;i++)ctx.lineTo(path[i].x,path[i].y);ctx.stroke();const face=document.getElementById('face').value;const hex=document.getElementById('colour').value;ctx.strokeStyle=hex;ctx.lineWidth=6;ctx.globalAlpha=.35;for(let i=0;i<path.length-1;i++){const a=path[i],b=path[i+1];const n=normal(a.x,a.y,b.x,b.y);const off=face==='left'?6:-6;ctx.beginPath();ctx.moveTo(a.x+n.x*off,a.y+n.y*off);ctx.lineTo(b.x+n.x*off,b.y+n.y*off);ctx.stroke();}ctx.globalAlpha=1;for(let i=0;i<path.length;i++){const p=path[i];ctx.fillStyle='#000';ctx.beginPath();ctx.arc(p.x,p.y,3,0,Math.PI*2);ctx.fill();if(i<path.length-1){const a=p,b=path[i+1];const dx=b.x-a.x,dy=-(b.y-a.y);const len=(Math.hypot(dx,dy)/pxPerMm).toFixed(0);const ang=((Math.atan2(dy,dx)*180/Math.PI+360)%360).toFixed(0);const midx=(a.x+b.x)/2,midy=(a.y+b.y)/2;if(ang!=='90'){ctx.fillStyle='#d00';ctx.font='12px system-ui,-apple-system';ctx.fillText(len+' / '+ang+'°',midx+6,midy-6);ctx.fillStyle='#000';}}}refreshEditor();}
 </script>
-</body>
-</html>
+</body></html>
