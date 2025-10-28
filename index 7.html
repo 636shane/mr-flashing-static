@@ -1,0 +1,668 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<title>MR Flashing — Matrix Roofing (v7)</title>
+<meta name="theme-color" content="#003A75"/>
+<link rel="manifest" href="data:application/json,{&quot;name&quot;:&quot;MR Flashing&quot;,&quot;short_name&quot;:&quot;MR Flashing&quot;,&quot;start_url&quot;:&quot;./&quot;,&quot;display&quot;:&quot;standalone&quot;,&quot;theme_color&quot;:&quot;#003A75&quot;,&quot;background_color&quot;:&quot;#ffffff&quot;}"/>
+<style>
+:root{--brand:#003A75;--ink:#101418;--muted:#f6f8fb}
+*{box-sizing:border-box} html,body{height:100%} body{margin:0;font-family:-apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;color:var(--ink)}
+.appbar{display:flex;gap:12px;align-items:center;padding:10px 12px;border-bottom:1px solid #e7e9ec;background:#fff;position:sticky;top:0;z-index:5}
+.logo{font-weight:800;color:var(--brand)} .toolbar{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+.btn{border:1px solid #cfd6dd;background:#fff;padding:10px 12px;border-radius:12px;cursor:pointer} .btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
+.wrapper{display:grid;grid-template-columns:320px 1fr;grid-template-rows:auto 1fr auto;min-height:calc(100vh - 52px)}
+.sidebar{border-right:1px solid #e7e9ec;padding:12px;background:#fff}
+label{display:flex;flex-direction:column;gap:4px;font-size:12px;margin-bottom:10px}
+input,select,textarea{padding:10px;border:1px solid #cfd6dd;border-radius:12px;width:100%}
+.row{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
+.card{background:var(--muted);border:1px solid #e7e9ec;border-radius:12px;padding:10px;margin-bottom:12px}
+.small{font-size:11px;color:#5a616a}
+.stage{position:relative;background:
+  linear-gradient(0deg,rgba(0,0,0,.06) 1px,transparent 1px),
+  linear-gradient(90deg,rgba(0,0,0,.06) 1px,transparent 1px);
+background-size:24px 24px;display:flex;align-items:center;justify-content:center}
+canvas{border:1px solid #b4bcc6;background:#fff;margin:14px;touch-action:none;width:100%;height:auto;max-width:1400px}
+.inline{position:absolute;transform:translate(-50%,-50%);z-index:10}
+.table{width:100%;border-collapse:collapse}
+.table th,.table td{border:1px solid #e1e5ea;padding:8px;font-size:13px}
+.table th{background:#f7f9fb;text-align:left}
+.footer{padding:12px;border-top:1px solid #e7e9ec;background:#fafbfc;color:#4b4f56;font-size:12px}
+.swatch{height:28px;border:1px solid #cfd6dd;border-radius:8px}
+.summary{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:13px}
+.pill{padding:4px 10px;border:1px solid #d1d7de;border-radius:999px;background:#fff}
+.mobilebar{display:none;position:sticky;bottom:0;z-index:6;background:#fff;border-top:1px solid #e7e9ec;padding:8px;gap:8px;justify-content:space-between}
+.mobilebar .btn{flex:1}
+.leftbar{position:absolute;left:8px;top:8px;display:flex;flex-direction:column;gap:8px;z-index:4}
+.leftbar .btn{padding:8px 10px}
+.btn.on{outline:2px solid #003A75; outline-offset:2px}
+.endfold-badge{position:absolute;background:#003A75;color:#fff;padding:2px 8px;border-radius:999px;font:12px/18px system-ui}
+.lock-indicator{position:absolute;right:10px;top:10px;background:#003A75;color:#fff;padding:4px 10px;border-radius:999px;font:12px/18px system-ui;display:none}
+.hit{position:absolute;border-radius:6px;pointer-events:auto}
+@media (max-width: 900px){
+  .wrapper{grid-template-columns:1fr;grid-template-rows:auto auto 1fr auto auto}
+  .sidebar{order:2}
+  .stage{order:3}
+  .mobilebar{display:flex}
+}
+</style>
+</head>
+<body>
+<header class="appbar">
+  <div class="logo">MATRIX ROOFING</div><div>MR Flashing v7</div>
+  <div class="toolbar">
+    <button id="new" class="btn">New</button>
+    <button id="save" class="btn">Save</button>
+    <button id="load" class="btn">Load</button>
+    <button id="share" class="btn">Share</button>
+    <button id="add" class="btn primary">Add to Order</button>
+    <button id="export" class="btn">Export Order PDF</button>
+  </div>
+</header>
+
+<div class="wrapper">
+  <aside class="sidebar">
+
+    <div class="summary" style="margin-bottom:10px">
+      <span class="pill">Folds: <strong id="liveFolds">0</strong></span>
+      <span class="pill">GIRTH: <strong id="liveGirth">0</strong> mm</span>
+      <span class="pill">Seg: <strong id="liveSegLen">0</strong> mm @ <strong id="liveSegAng">0</strong>°</span>
+    </div>
+
+    <!-- Colours -->
+    <div class="card">
+      <div style="font-weight:600;margin-bottom:6px">Colour & Face</div>
+      <div class="row">
+        <label style="flex:1">Colorbond colour
+          <select id="colour"></select>
+          <div id="swatch" class="swatch" style="margin-top:6px"></div>
+        </label>
+        <label style="width:120px">Colour key
+          <input id="colourKey" placeholder="e.g. MON">
+        </label>
+      </div>
+      <div class="row">
+        <button id="openColour" class="btn">Open colour page ⤴︎</button>
+        <label style="flex:1">Face
+          <select id="face"><option value="left">Left</option><option value="right">Right</option></select>
+        </label>
+      </div>
+    </div>
+
+    <!-- Cut list -->
+    <div class="card">
+      <div style="font-weight:600;margin-bottom:6px">Cut List</div>
+      <div class="row">
+        <label style="flex:1">Length (mm)<input id="cutLen" type="number" value="2400"></label>
+        <label style="width:110px">Qty<input id="cutQty" type="number" value="1" min="1"></label>
+        <button id="addCut" class="btn">Add</button>
+      </div>
+      <div class="small" style="margin:6px 0">Add multiple lengths with quantities; the item will include the whole list.</div>
+      <table class="table" id="cutTable"><thead>
+        <tr><th>#</th><th>Length (mm)</th><th>Qty</th><th>Actions</th></tr>
+      </thead><tbody id="cutBody"></tbody></table>
+    </div>
+
+    <!-- Drawing controls -->
+    <div class="card">
+      <div style="font-weight:600;margin-bottom:6px">Drawing</div>
+      <div class="row">
+        <label style="flex:1">Zoom<input id="zoom" type="range" min="0.5" max="3" step="0.1" value="1"></label>
+        <label style="width:140px">Scale (px/mm)<input id="scale" type="number" step="0.1" value="1"></label>
+        <label style="width:110px">Snap (px)<input id="snap" type="number" value="6"></label>
+      </div>
+      <div class="row">
+        <button id="lock" class="btn" style="flex:1">🔒 Lock</button>
+        <button id="undo" class="btn" style="flex:1">↩︎ Undo</button>
+        <button id="redo" class="btn" style="flex:1">↪︎ Redo</button>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <label style="flex:1">Seg #<input id="seg" type="number" min="0" value="0"></label>
+        <label style="flex:1">Length (mm)<input id="segLen" type="number" value="0"></label>
+        <label style="flex:1">Angle (°)<input id="segAng" type="number" step="0.1" value="0"></label>
+        <button id="apply" class="btn">Apply</button>
+      </div>
+      <div class="small" style="margin-top:6px">Tap to place points (dot-to-dot). Two-finger pinch to zoom, two-finger drag to pan. <b>Lock</b> to edit labels directly (tap a length/angle).</div>
+    </div>
+
+    <!-- Item meta -->
+    <div class="card">
+      <div style="font-weight:600;margin-bottom:6px">Item</div>
+      <div class="row">
+        <label style="flex:2">Name<input id="name" value="Flashing"></label>
+        <label style="flex:1">Gauge<input id="gauge" value="0.55"></label>
+      </div>
+      <label>Notes<textarea id="notes" rows="2" placeholder="Optional notes…"></textarea></label>
+    </div>
+
+  </aside>
+
+  <main class="stage" id="stage">
+    <div class="leftbar">
+      <button id="breakNext" class="btn">Break Line (next)</button>
+      <button id="endFold" class="btn">End Fold</button>
+    </div>
+    <div id="lockBadge" class="lock-indicator">EDIT MODE</div>
+    <canvas id="cv" width="1200" height="680"></canvas>
+    <div id="overlay"></div>
+    <div id="hitLayer"></div>
+    <div id="endfoldBadge" class="endfold-badge" style="display:none">END FOLD</div>
+  </main>
+
+  <section style="padding:12px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+      <strong>Orders</strong>
+      <div style="margin-left:auto">Total items: <span id="orderCount">0</span></div>
+    </div>
+    <div style="overflow:auto">
+      <table class="table" id="orderTable">
+        <thead>
+          <tr>
+            <th>Preview</th><th>Name</th><th>Colour</th><th>Key</th><th>Gauge</th>
+            <th>F</th><th>GIRTH</th><th>Cut List</th><th>T-Value</th><th>Notes</th><th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="orderBody"></tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<div class="mobilebar">
+  <button id="mobileLock" class="btn">Lock</button>
+  <button id="mobileAdd" class="btn primary">Add</button>
+  <button id="mobileExport" class="btn">PDF</button>
+</div>
+
+<footer class="footer">Matrix Roofing — Roof Restorations & Custom Flashings · Melbourne VIC</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+/* ---------- Colour data ---------- */
+const PALETTE = [
+ ["Surfmist","#ECEBE6","SUR"],["Evening Haze","#D6D0BE","EVH"],["Classic Cream","#F4E3BE","CLC"],
+ ["Paperbark","#CBB99E","PAP"],["Shale Grey","#B7B9B7","SHG"],["Dune","#B3ADA0","DUN"],
+ ["Cove","#918A78","COV"],["Pale Eucalypt","#5E6D57","PAE"],["Woodland Grey","#4B4F46","WLG"],
+ ["Windspray","#8F9697","WIN"],["Gully","#7C726B","GUL"],["Mangrove","#6E6F5B","MAN"],
+ ["Deep Ocean","#2F3A56","DOC"],["Cottage Green","#2B5C4B","CGN"],["Wallaby","#8C867B","WAL"],
+ ["Jasper","#7C5A46","JAS"],["Basalt","#6A6C6E","BAS"],["Manor Red","#7E2B2B","MRD"],
+ ["Night Sky","#1A1A1A","NYS"],["Ironstone","#434E5A","IRS"],["Terrain","#7A4A3B","TER"],
+ ["Monument","#2B2B2B","MON"]
+];
+const colourSel = document.getElementById('colour');
+PALETTE.forEach(([n,h,k])=>{
+  const o=document.createElement('option'); o.value=h; o.textContent=n; o.dataset.key=k;
+  o.dataset.url = 'https://www.google.com/search?q=COLORBOND+'+encodeURIComponent(n);
+  colourSel.appendChild(o);
+});
+const swatch=document.getElementById('swatch');
+const colourKey=document.getElementById('colourKey');
+function updateSwatch(){ swatch.style.background = colourSel.value; if(!colourKey.value) colourKey.value = colourSel.selectedOptions[0]?.dataset.key||""; }
+updateSwatch(); colourSel.onchange = updateSwatch;
+document.getElementById('openColour').onclick = () => { const url = colourSel.selectedOptions[0]?.dataset.url; if(url) window.open(url,'_blank'); };
+
+/* ---------- Canvas state ---------- */
+const stage=document.getElementById('stage');
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+const overlay=document.getElementById('overlay');
+const hitLayer=document.getElementById('hitLayer');
+let Z=1, ox=0, oy=0, pxPerMm=1, snap=6, locked=false, drawing=false, livePoint=null;
+let path=[], history=[], redo=[];
+let segMeta=[]; // {break:boolean}
+let endFoldIdx = null;
+
+const liveFolds = document.getElementById('liveFolds');
+const liveGirth = document.getElementById('liveGirth');
+const liveSegLen = document.getElementById('liveSegLen');
+const liveSegAng = document.getElementById('liveSegAng');
+const endfoldBadge = document.getElementById('endfoldBadge');
+const lockBadge = document.getElementById('lockBadge');
+
+/* ---------- Left toolbar toggles ---------- */
+let breakNext=false;
+const breakBtn=document.getElementById('breakNext');
+breakBtn.onclick=()=>{ breakNext=!breakNext; breakBtn.classList.toggle('on', breakNext); };
+
+const endFoldBtn=document.getElementById('endFold');
+endFoldBtn.onclick=()=>{
+  if(endFoldIdx==null){
+    if(path.length>1){ endFoldIdx = path.length-1; updateEndFoldBadge(); }
+    endFoldBtn.classList.add('on');
+  }else{
+    endFoldIdx = null; updateEndFoldBadge();
+    endFoldBtn.classList.remove('on');
+  }
+  draw();
+};
+
+/* ---------- Undo/Redo ---------- */
+function push(){history.push(JSON.stringify({path,segMeta,endFoldIdx,ox,oy,Z})); if(history.length>256) history.shift(); redo.length=0;}
+function undo(){ if(history.length){ redo.push(JSON.stringify({path,segMeta,endFoldIdx,ox,oy,Z})); const s=JSON.parse(history.pop()); path=s.path; segMeta=s.segMeta; endFoldIdx=s.endFoldIdx; ox=s.ox; oy=s.oy; Z=s.Z; draw(); updateTotals(); updateEndFoldBadge(); } }
+function redoF(){ if(redo.length){ history.push(JSON.stringify({path,segMeta,endFoldIdx,ox,oy,Z})); const s=JSON.parse(redo.pop()); path=s.path; segMeta=s.segMeta; endFoldIdx=s.endFoldIdx; ox=s.ox; oy=s.oy; Z=s.Z; draw(); updateTotals(); updateEndFoldBadge(); } }
+document.getElementById('undo').onclick=undo; document.getElementById('redo').onclick=redoF;
+
+/* ---------- Controls ---------- */
+document.getElementById('zoom').oninput=e=>{ Z=parseFloat(e.target.value||'1'); draw(); updateEndFoldBadge(); };
+document.getElementById('scale').onchange=e=>{ pxPerMm=parseFloat(e.target.value||'1'); draw(); updateTotals(); };
+document.getElementById('snap').onchange=e=>{ snap=parseInt(e.target.value||'0',10); };
+document.getElementById('lock').onclick=toggleLock;
+document.getElementById('mobileLock').onclick=toggleLock;
+function toggleLock(){ 
+  locked=!locked; 
+  document.getElementById('lock').textContent = locked?'🔓 Unlock':'🔒 Lock'; 
+  document.getElementById('mobileLock').textContent = locked?'Unlock':'Lock'; 
+  lockBadge.style.display = locked ? 'block' : 'none';
+  clearInline(); rebuildHitboxes(); draw(); 
+}
+
+/* ---------- Coord helpers ---------- */
+function screenToWorld(sx,sy){ return { x:(sx-ox)/Z, y:(sy-oy)/Z }; }
+function worldToScreen(wx,wy){ return { x:wx*Z+ox, y:wy*Z+oy }; }
+function posFromEvent(e){
+  const r=cv.getBoundingClientRect();
+  const sx=(e.touches?e.touches[0].clientX:e.clientX)-r.left;
+  const sy=(e.touches?e.touches[0].clientY:e.clientY)-r.top;
+  return screenToWorld(sx,sy);
+}
+function snapP(p){ if(!snap) return p; return {x:Math.round(p.x*snap)/snap, y:Math.round(p.y*snap)/snap}; }
+function lengthMm(a,b){ return Math.hypot(b.x-a.x,b.y-a.y)/pxPerMm; }
+function angleDegSmall(a,b){ let ang = Math.atan2(b.y-a.y,b.x-a.x)*180/Math.PI; ang = (ang+360)%360; if(ang>180) ang = 360-ang; return Math.round(ang); }
+
+/* ---------- Dot-to-dot drawing ---------- */
+function pointerDown(e){
+  if(locked) return; // editing uses hitboxes instead
+  if(e.touches && e.touches.length>=2){ return; }
+  const p=snapP(posFromEvent(e)); 
+  push();
+  if(!drawing){ path=[p]; segMeta=[]; drawing=true; livePoint=p; }
+  else{
+    path.push(p); livePoint=p;
+    const idx = path.length-2; segMeta[idx] = {break: breakNext};
+    if(breakNext){ breakNext=false; breakBtn.classList.remove('on'); }
+  }
+  draw(); updateTotals(); updateEndFoldBadge(); e.preventDefault();
+}
+function pointerMove(e){
+  if(locked) return;
+  if(e.touches && e.touches.length>=2){ handlePinch(e); return; }
+  if(!drawing||!path.length) return;
+  livePoint = snapP(posFromEvent(e));
+  draw(); updateLiveMeasures(); e.preventDefault();
+}
+function pointerUp(e){ e.preventDefault(); }
+
+cv.addEventListener('pointerdown',pointerDown,{passive:false});
+cv.addEventListener('pointermove',pointerMove,{passive:false});
+cv.addEventListener('pointerup',pointerUp,{passive:false});
+
+/* ---------- Pinch-zoom and pan (two-finger) ---------- */
+let pinchLastDist=null, pinchLastWorld=null;
+function getTouchInfo(e){
+  const r=cv.getBoundingClientRect();
+  const t1=e.touches[0], t2=e.touches[1];
+  const c={ x:((t1.clientX+t2.clientX)/2)-r.left, y:((t1.clientY+t2.clientY)/2)-r.top };
+  const dx=(t1.clientX - t2.clientX), dy=(t1.clientY - t2.clientY);
+  const d=Math.hypot(dx,dy);
+  return {center:c, dist:d};
+}
+function handlePinch(e){
+  e.preventDefault();
+  if(e.touches.length<2){ pinchLastDist=null; pinchLastWorld=null; return; }
+  const info=getTouchInfo(e);
+  if(pinchLastDist==null){ pinchLastDist=info.dist; pinchLastWorld=screenToWorld(info.center.x,info.center.y); return; }
+  const scale = info.dist / pinchLastDist;
+  const newZ = Math.max(0.5, Math.min(3, Z*scale));
+  Z = newZ;
+  ox = info.center.x - pinchLastWorld.x * Z;
+  oy = info.center.y - pinchLastWorld.y * Z;
+  pinchLastDist=info.dist;
+  draw(); updateEndFoldBadge(); rebuildHitboxes();
+}
+stage.addEventListener('touchmove',e=>{ if(e.touches && e.touches.length>=2) handlePinch(e); }, {passive:false});
+
+/* ---------- Geometry ---------- */
+function segs(){ const s=[]; for(let i=0;i<path.length-1;i++) s.push([path[i],path[i+1],i]); return s; }
+function normal(ax,ay,bx,by){ const dx=bx-ax,dy=by-ay, L=Math.hypot(dx,dy)||1; return {x:-dy/L,y:dx/L}; }
+function cornerAngle(prev,pt,next){
+  const v1={x:prev.x-pt.x,y:prev.y-pt.y}, v2={x:next.x-pt.x,y:next.y-pt.y};
+  const dot=v1.x*v2.x+v1.y*v2.y, l1=Math.hypot(v1.x,v1.y), l2=Math.hypot(v2.x,v2.y);
+  if(l1*l2===0) return 0;
+  const a=Math.acos(Math.max(-1,Math.min(1,dot/(l1*l2))));
+  return +(Math.min(a*180/Math.PI,180)).toFixed(1);
+}
+
+function rr(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); }
+function badge(x,y,txt){
+  ctx.font='12px system-ui,-apple-system';
+  const w=ctx.measureText(txt).width+12, h=18;
+  ctx.fillStyle='#d00'; rr(x-w/2,y-h/2,w,h,9); ctx.fill();
+  ctx.fillStyle='#fff'; ctx.fillText(txt,x-w/2+6,y+4);
+}
+
+/* ---------- Draw & labels ---------- */
+function draw(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  if(!path.length){ updateLiveMeasures(true); rebuildHitboxes(); return; }
+  ctx.save(); ctx.translate(ox,oy); ctx.scale(Z,Z);
+
+  // Base polyline + preview
+  ctx.strokeStyle='#000'; ctx.lineWidth=2/Z;
+  ctx.beginPath(); ctx.moveTo(path[0].x,path[0].y);
+  for(let i=1;i<path.length;i++) ctx.lineTo(path[i].x,path[i].y);
+  if(drawing && livePoint){ ctx.lineTo(livePoint.x, livePoint.y); }
+  ctx.stroke();
+
+  // Render break segments dashed
+  ctx.setLineDash([8/Z,6/Z]); ctx.strokeStyle='#000'; ctx.lineWidth=2/Z;
+  for(let i=0;i<path.length-1;i++){
+    if(segMeta[i]?.break){
+      const a=path[i], b=path[i+1];
+      ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+    }
+  }
+  ctx.setLineDash([]);
+
+  // Face highlight up to endFoldIdx
+  const face=document.getElementById('face').value, hex=colourSel.value;
+  ctx.strokeStyle=hex; ctx.globalAlpha=.35; ctx.lineWidth=6/Z;
+  const maxHigh = endFoldIdx==null ? path.length-2 : Math.min(endFoldIdx-1, path.length-2);
+  for(let i=0;i<=maxHigh;i++){
+    if(i<0) continue;
+    const a=path[i],b=path[i+1], n=normal(a.x,a.y,b.x,b.y), off=face==='left'?6:-6;
+    ctx.beginPath(); ctx.moveTo(a.x+n.x*off,a.y+n.y*off); ctx.lineTo(b.x+n.x*off,b.y+n.y*off); ctx.stroke();
+  }
+  ctx.globalAlpha=1;
+
+  // Points
+  ctx.fillStyle='#000';
+  for(const p of path){ ctx.beginPath(); ctx.arc(p.x,p.y,3/Z,0,Math.PI*2); ctx.fill(); }
+  if(drawing && livePoint){ ctx.beginPath(); ctx.arc(livePoint.x,livePoint.y,3/Z,0,Math.PI*2); ctx.fill(); }
+
+  // Corner arcs (smallest angle)
+  const r=20; ctx.strokeStyle='#555'; ctx.lineWidth=1/Z; ctx.setLineDash([4/Z,3/Z]);
+  for(let i=1;i<path.length-1;i++){
+    const pm=path[i-1], p=path[i], pn=path[i+1];
+    let a1=Math.atan2(pm.y-p.y,pm.x-p.x), a2=Math.atan2(pn.y-p.y,pn.x-p.x);
+    let d=a2-a1; while(d>Math.PI){a2-=2*Math.PI; d=a2-a1} while(d<-Math.PI){a2+=2*Math.PI; d=a2-a1}
+    ctx.beginPath(); ctx.arc(p.x,p.y,r,a1,a2); ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  ctx.restore();
+
+  // Labels (screen space)
+  for(let i=0;i<path.length-1;i++){
+    const a=path[i],b=path[i+1], L=Math.round(lengthMm(a,b));
+    const m = worldToScreen((a.x+b.x)/2,(a.y+b.y)/2);
+    badge(m.x,m.y, L+" mm");
+  }
+  for(let i=1;i<path.length-1;i++){
+    const ang=cornerAngle(path[i-1],path[i],path[i+1]);
+    const s = worldToScreen(path[i].x, path[i].y);
+    badge(s.x+8, s.y-8, ang+"°");
+  }
+
+  // Live preview label
+  if(drawing && path.length){
+    const a=path[path.length-1], b=livePoint||a;
+    const L=Math.round(lengthMm(a,b)); const ang = angleDegSmall(a,b);
+    const m = worldToScreen((a.x+b.x)/2,(a.y+b.y)/2);
+    liveSegLen.textContent = L; liveSegAng.textContent = ang;
+    badge(m.x,m.y, L+" mm @ "+ang+"°");
+  }
+
+  rebuildHitboxes();
+}
+
+/* ---------- Hitboxes for editing ---------- */
+function rebuildHitboxes(){
+  hitLayer.innerHTML='';
+  if(!locked) return;
+  // lengths
+  for(let i=0;i<path.length-1;i++){
+    const a=path[i], b=path[i+1];
+    const m = worldToScreen((a.x+b.x)/2,(a.y+b.y)/2);
+    const hb=document.createElement('div'); hb.className='hit'; hb.style.left=(m.x-40)+'px'; hb.style.top=(m.y-14)+'px';
+    hb.style.width='80px'; hb.style.height='28px'; hb.style.background='transparent';
+    hb.dataset.kind='seg'; hb.dataset.index=i;
+    hb.addEventListener('click',()=> editSegmentLength(i, m.x, m.y));
+    hitLayer.appendChild(hb);
+  }
+  // angles
+  for(let i=1;i<path.length-1;i++){
+    const s = worldToScreen(path[i].x, path[i].y);
+    const hb=document.createElement('div'); hb.className='hit'; hb.style.left=(s.x-34)+'px'; hb.style.top=(s.y-34)+'px';
+    hb.style.width='68px'; hb.style.height='28px'; hb.style.background='transparent';
+    hb.dataset.kind='corner'; hb.dataset.index=i;
+    hb.addEventListener('click',()=> editCornerAngle(i, s.x+8, s.y-8));
+    hitLayer.appendChild(hb);
+  }
+}
+
+/* ---------- Inline editing ---------- */
+function clearInline(){ overlay.innerHTML=''; }
+function inlineEditor(x,y, value, onApply){
+  clearInline();
+  const w=document.createElement('div'); w.className='inline';
+  const i=document.createElement('input'); i.value=value; i.inputMode='decimal';
+  i.style.padding='8px 10px'; i.style.border='2px solid #d00'; i.style.borderRadius='10px';
+  i.style.minWidth='110px'; i.style.textAlign='center'; i.style.font='16px system-ui,-apple-system';
+  w.style.left=x+'px'; w.style.top=y+'px'; w.appendChild(i); overlay.appendChild(w); i.focus(); i.select();
+  const cancel=()=>{ clearInline(); };
+  i.addEventListener('keydown',ev=>{ if(ev.key==='Enter'){ const v=parseFloat(i.value); if(!isNaN(v)) onApply(v); cancel(); } if(ev.key==='Escape'){ cancel(); } });
+  // tap outside to cancel
+  setTimeout(()=>{ document.addEventListener('pointerdown', outsideOnce, {once:true}); },0);
+  function outsideOnce(ev){ if(!w.contains(ev.target)) cancel(); }
+}
+function editSegmentLength(idx, sx, sy){
+  const a=path[idx], b=path[idx+1];
+  const angle=Math.atan2(b.y-a.y,b.x-a.x);
+  inlineEditor(sx,sy, Math.round(lengthMm(a,b)), val=>{
+    const r=val*pxPerMm;
+    path[idx+1] = {x:a.x + r*Math.cos(angle), y:a.y + r*Math.sin(angle)};
+    draw(); updateTotals();
+  });
+}
+function editCornerAngle(i, sx, sy){
+  const deg=cornerAngle(path[i-1],path[i],path[i+1]);
+  inlineEditor(sx,sy, deg, v=>applyCorner(i, v));
+}
+function applyCorner(i,deg){
+  if(path.length<3) return;
+  i=Math.max(1,Math.min(i,path.length-2));
+  const desired=Math.max(0,Math.min(180,deg))*Math.PI/180;
+  const Pm=path[i-1], P=path[i], Pn=path[i+1];
+  const vPrev={x:P.x-Pm.x,y:P.y-Pm.y}, thetaPrev=Math.atan2(vPrev.y,vPrev.x);
+  const delta=Math.PI-desired;
+  const cur=Math.atan2(Pn.y-P.y,Pn.x-P.x);
+  const opt1=thetaPrev+delta, opt2=thetaPrev-delta;
+  const d1=Math.abs(Math.atan2(Math.sin(cur-opt1),Math.cos(cur-opt1)));
+  const targ=Math.abs(d1)<Math.PI/2 ? opt1 : opt2;
+  const L=Math.hypot(Pn.x-P.x,Pn.y-P.y);
+  path[i+1]={x:P.x+L*Math.cos(targ), y:P.y+L*Math.sin(targ)};
+  draw(); updateTotals();
+}
+
+/* ---------- Live totals & measures ---------- */
+function updateLiveMeasures(clear=false){
+  if(clear || !(drawing && path.length)){
+    liveSegLen.textContent = '0'; liveSegAng.textContent = '0';
+    return;
+  }
+  const a=path[path.length-1], b=livePoint||a;
+  const L=Math.round(lengthMm(a,b)); const ang = angleDegSmall(a,b);
+  liveSegLen.textContent = L; liveSegAng.textContent = ang;
+}
+function updateTotals(){
+  const F = Math.max(0, path.length-1);
+  let G = 0; for(let i=0;i<path.length-1;i++){ G += lengthMm(path[i], path[i+1]); }
+  liveFolds.textContent = F;
+  liveGirth.textContent = Math.round(G);
+  updateEndFoldBadge(); rebuildHitboxes();
+}
+function updateEndFoldBadge(){
+  if(endFoldIdx==null){ endfoldBadge.style.display='none'; return; }
+  const p = path[endFoldIdx];
+  if(!p){ endfoldBadge.style.display='none'; return; }
+  const s = worldToScreen(p.x,p.y);
+  endfoldBadge.style.display='block'; endfoldBadge.style.left=(s.x)+'px'; endfoldBadge.style.top=(s.y-24)+'px';
+}
+
+/* ---------- Numeric controls ---------- */
+const seg=document.getElementById('seg'), segLen=document.getElementById('segLen'), segAng=document.getElementById('segAng');
+document.getElementById('apply').onclick=()=>{
+  const S=segs(); if(!S.length) return;
+  const i=Math.min(parseInt(seg.value||'0',10), S.length-1);
+  const a=path[i];
+  const L=(parseFloat(segLen.value)||0)*pxPerMm;
+  const ang=(parseFloat(segAng.value)||0)*Math.PI/180;
+  path[i+1]={x:a.x+L*Math.cos(ang), y:a.y+L*Math.sin(ang)};
+  draw(); updateTotals();
+};
+document.getElementById('new').onclick=()=>{ if(path.length>1 && !confirm('Clear current drawing?')) return; path=[]; segMeta=[]; endFoldIdx=null; history.length=0; redo.length=0; cutList.length=0; renderCuts(); draw(); updateTotals(); updateEndFoldBadge(); };
+
+/* ---------- Mobile footer buttons ---------- */
+document.getElementById('mobileAdd').onclick=()=>document.getElementById('add').click();
+document.getElementById('mobileExport').onclick=()=>document.getElementById('export').click();
+
+/* ---------- Cut list ---------- */
+const cutBody=document.getElementById('cutBody'); const cutList=[];
+function renderCuts(){
+  cutBody.innerHTML='';
+  cutList.forEach((c,i)=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML = `<td>${i+1}</td><td>${c.len}</td><td>${c.qty}</td>
+      <td><button data-i="${i}" class="btn">Remove</button></td>`;
+    cutBody.appendChild(tr);
+  });
+  cutBody.querySelectorAll('button.btn').forEach(b=> b.onclick=()=>{
+    cutList.splice(parseInt(b.dataset.i,10),1); renderCuts();
+  });
+}
+document.getElementById('addCut').onclick=()=>{
+  const L=parseInt(document.getElementById('cutLen').value||'0',10);
+  const Q=parseInt(document.getElementById('cutQty').value||'1',10);
+  if(!L||!Q) return;
+  cutList.push({len:L,qty:Q}); renderCuts();
+};
+
+/* ---------- Orders + PDF ---------- */
+function girth(){ let g=0; for(let i=0;i<path.length-1;i++){ g += lengthMm(path[i], path[i+1]); } return Math.round(g); }
+function folds(){ return Math.max(0,path.length-1); }
+function snapshot(){ return cv.toDataURL('image/png'); }
+
+const orders=[]; const orderBody=document.getElementById('orderBody'); const orderCount=document.getElementById('orderCount');
+function renderOrders(){
+  orderBody.innerHTML=''; orderCount.textContent=String(orders.length);
+  orders.forEach((o,i)=>{
+    const cutTxt = o.cuts.length? o.cuts.map(c=> `${c.qty}×${c.len}`).join(', ') : '-';
+    const tr=document.createElement('tr');
+    tr.innerHTML = `<td><img src="${o.image}" style="width:120px;height:auto;border:1px solid #ddd;border-radius:6px"></td>
+      <td>${o.name}</td><td>${o.colourName}</td><td>${o.colourKey}</td><td>${o.gauge}</td>
+      <td>${o.F}</td><td>${o.GIRTH}</td><td>${cutTxt}</td><td>${o.T}</td>
+      <td>${o.notes||''}</td><td><button data-i="${i}" class="btn">Remove</button></td>`;
+    orderBody.appendChild(tr);
+  });
+  orderBody.querySelectorAll('button.btn').forEach(b=> b.onclick=()=>{ orders.splice(parseInt(b.dataset.i,10),1); renderOrders(); });
+}
+
+document.getElementById('add').onclick=()=>{
+  if(path.length<2){ alert('Draw first'); return; }
+  const opt=colourSel.selectedOptions[0];
+  orders.unshift({
+    id:Date.now().toString(),
+    name:document.getElementById('name').value || 'Flashing',
+    gauge:document.getElementById('gauge').value || '0.55',
+    colourName:opt?.textContent||'Colour',
+    colourHex:colourSel.value,
+    colourKey:document.getElementById('colourKey').value || opt?.dataset.key || '',
+    face:document.getElementById('face').value,
+    F:folds(), GIRTH:girth(), T:(girth()/1000).toFixed(1),
+    image:snapshot(), notes:document.getElementById('notes').value||'',
+    cuts:[...cutList]
+  });
+  renderOrders();
+};
+
+document.getElementById('export').onclick=()=>{
+  if(!orders.length){ alert('No items'); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({unit:'pt',format:'a4'});
+  let y=40;
+  doc.setFontSize(14); doc.setTextColor(0,58,117);
+  doc.text('MATRIX ROOFING — MR FLASHING ORDER (v7)', 40, y); y+=24;
+  doc.setTextColor(0,0,0); doc.setFontSize(10);
+  doc.text('Generated: '+new Date().toLocaleString(),40,y); y+=18;
+
+  // Include live totals summary
+  doc.setFontSize(11);
+  doc.text('Totals at export — Folds: '+folds()+'   GIRTH: '+girth()+' mm', 40, y); y+=18;
+
+  doc.setFontSize(9);
+  const headers = ['Name','Colour','Key','Gauge','F','GIRTH','Cut List','T-Value','Notes'];
+  const widths  = [90,90,50,50,25,50,180,50,150];
+  function row(vals){ let x=40; for(let i=0;i<widths.length;i++){ doc.rect(x,y,widths[i],20); doc.text(String(vals[i]??''), x+4, y+13); x+=widths[i]; } y+=20; }
+  row(headers);
+  orders.forEach(o=> row([o.name,o.colourName,o.colourKey,o.gauge,o.F,o.GIRTH,(o.cuts.map(c=>c.qty+'×'+c.len).join(', ')||'-'),o.T,o.notes||'']));
+
+  y+=20; doc.text('• Arrow points to the (solid) coloured side   • 90° not labelled   • F = number of folds',40,y);
+  y+=16; doc.text('Matrix Roofing — Roof Restorations & Custom Flashings · Melbourne VIC', 40, y);
+  doc.save('MR-Flashing-Order-v7.pdf');
+};
+
+/* ---------- Save / Load / Share ---------- */
+document.getElementById('save').onclick=()=>{
+  const state = currentState();
+  localStorage.setItem('mr-flashing-state-v7', JSON.stringify(state));
+  const blob = new Blob([JSON.stringify(state,null,2)], {type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='mrflashing-v7.json'; a.click();
+};
+document.getElementById('load').onclick=()=>{
+  const inp=document.createElement('input'); inp.type='file'; inp.accept='application/json,.json';
+  inp.onchange=()=>{ const f=inp.files[0]; if(!f) return;
+    const r=new FileReader(); r.onload=()=>{ try{ applyState(JSON.parse(r.result)); }catch(e){ alert('Invalid file'); } };
+    r.readAsText(f);
+  }; inp.click();
+};
+document.getElementById('share').onclick=()=>{
+  const enc = btoa(unescape(encodeURIComponent(JSON.stringify(currentState()))));
+  const url = location.origin + location.pathname + '#d=' + enc;
+  navigator.clipboard?.writeText(url);
+  alert('Share link copied to clipboard');
+};
+
+function currentState(){
+  const opt=colourSel.selectedOptions[0];
+  return {
+    drawing:{path,segMeta,endFoldIdx,pxPerMm,Z,ox,oy,snap,face:document.getElementById('face').value,colour:colourSel.value},
+    item:{name:document.getElementById('name').value,gauge:document.getElementById('gauge').value,notes:document.getElementById('notes').value,
+          colourName:opt?.textContent||'', colourKey:document.getElementById('colourKey').value||''},
+    cuts:[...cutList]
+  };
+}
+function applyState(s){
+  path=s?.drawing?.path||[]; segMeta=s?.drawing?.segMeta||[]; endFoldIdx=s?.drawing?.endFoldIdx??null;
+  pxPerMm=s?.drawing?.pxPerMm||1; Z=s?.drawing?.Z||1; ox=s?.drawing?.ox||0; oy=s?.drawing?.oy||0; snap=s?.drawing?.snap||6;
+  document.getElementById('face').value=s?.drawing?.face||'left';
+  colourSel.value=s?.drawing?.colour||colourSel.value; updateSwatch();
+  document.getElementById('name').value=s?.item?.name||'Flashing';
+  document.getElementById('gauge').value=s?.item?.gauge||'0.55';
+  document.getElementById('notes').value=s?.item?.notes||'';
+  document.getElementById('colourKey').value=s?.item?.colourKey||'';
+  cutList.length=0; (s?.cuts||[]).forEach(c=>cutList.push(c)); renderCuts();
+  document.getElementById('zoom').value=Z; document.getElementById('scale').value=pxPerMm; document.getElementById('snap').value=snap;
+  endFoldBtn.classList.toggle('on', endFoldIdx!=null);
+  draw(); updateTotals(); updateEndFoldBadge();
+}
+
+// init
+(function init(){
+  const h=location.hash||''; if(h.startsWith('#d=')){ try{ applyState(JSON.parse(decodeURIComponent(escape(atob(h.slice(3)))))); return; }catch(e){} }
+  const saved=localStorage.getItem('mr-flashing-state-v7'); if(saved){ try{ applyState(JSON.parse(saved)); return; }catch(e){} }
+  draw(); updateTotals();
+})();
+</script>
+</body>
+</html>
