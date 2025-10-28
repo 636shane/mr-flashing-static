@@ -4,29 +4,25 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MR Flashing v5.9 — Matrix Roofing</title>
+<title>MR Flashing v5.8 — Matrix Roofing</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#003A75">
 <style>
-:root{--brand:#003A75;--ink:#111}
+:root{--brand:#003A75}
 *{box-sizing:border-box}body{margin:0;font-family:-apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial}
 .appbar{display:flex;gap:10px;align-items:center;padding:10px;border-bottom:1px solid #e8ecf0;background:#fff}
 .logo{font-weight:800;color:var(--brand)}
 .btn{border:1px solid #ccd3da;background:#fff;padding:8px 10px;border-radius:8px;cursor:pointer}
 .btn.primary{background:var(--brand);color:#fff;border-color:var(--brand)}
-.panel{display:grid;grid-template-columns:340px 1fr;min-height:calc(100vh - 56px)}
-.left{border-right:1px solid #e8ecf0;padding:12px}
-label{font-size:12px;display:flex;flex-direction:column;gap:6px;margin-bottom:10px}
-input,select,textarea{padding:8px;border:1px solid #ccd3da;border-radius:8px;width:100%;font-size:14px}
+.panel{display:grid;grid-template-columns:320px 1fr;min-height:calc(100vh - 56px)}
+.left{border-right:1px solid #e8ecf0;padding:10px}
+label{font-size:12px;display:flex;flex-direction:column;gap:6px;margin-bottom:8px}
+input,select{padding:8px;border:1px solid #ccd3da;border-radius:8px;width:100%}
 .swatch{width:100%;height:28px;border:1px solid #ccd3da;border-radius:8px;margin-top:6px}
 .stage{position:relative;background:linear-gradient(0deg,rgba(0,0,0,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(0,0,0,.06) 1px,transparent 1px);background-size:24px 24px;overflow:auto}
 #cv{border:1px solid #b6c0ca;background:#fff;margin:16px;touch-action:none;max-width:100%}
 .inline-input{position:absolute;z-index:10;transform:translate(-50%,-50%)}
 .inline-input input{padding:6px 8px;font-size:14px;border:2px solid #d00;border-radius:8px;min-width:90px;text-align:center}
-.small{font-size:12px;color:#666}
-.row{display:flex;gap:10px}
-.row>*{flex:1}
-hr{border:none;border-top:1px solid #e8ecf0;margin:10px 0}
 </style>
 </head>
 <body>
@@ -37,27 +33,16 @@ hr{border:none;border-top:1px solid #e8ecf0;margin:10px 0}
   <button id="undo" class="btn">↩︎ Undo</button>
   <button id="redo" class="btn">↪︎ Redo</button>
   <button id="dot" class="btn primary">Dot Mode: ON</button>
-  <div style="margin-left:auto;display:flex;gap:8px">
-    <button id="exportPNG" class="btn">Export PNG</button>
-    <button id="orderPDF" class="btn primary">Order PDF</button>
-  </div>
+  <div style="margin-left:auto"></div>
+  <button id="exportPNG" class="btn">Export PNG</button>
 </div>
-
 <div class="panel">
   <div class="left">
-    <div class="row">
-      <label>Zoom <input id="zoom" type="range" min="0.5" max="3" step="0.1" value="1"></label>
-      <label>Scale (px/mm) <input id="scale" type="number" step="0.1" value="1"></label>
-      <label>Snap (px) <input id="snap" type="number" value="6"></label>
-    </div>
-    <label>Item / Name <input id="name" value="Flashing"></label>
-    <div class="row">
-      <label>Length (mm) <input id="lenmm" type="number" value="2400"></label>
-      <label>Gauge <input id="gauge" value="0.55"></label>
-    </div>
-    <div class="row">
-      <label>Colourbond
-        <select id="colour">
+    <label>Zoom <input id="zoom" type="range" min="0.5" max="3" step="0.1" value="1"></label>
+    <label>Scale (px/mm) <input id="scale" type="number" step="0.1" value="1"></label>
+    <label>Snap (px) <input id="snap" type="number" value="6"></label>
+    <label>Colourbond
+      <select id="colour">
   <option value="#ECEBE6">Surfmist</option>
   <option value="#D6D0BE">Evening Haze</option>
   <option value="#F4E3BE">Classic Cream</option>
@@ -81,313 +66,88 @@ hr{border:none;border-top:1px solid #e8ecf0;margin:10px 0}
   <option value="#7A4A3B">Terrain</option>
   <option value="#2B2B2B">Monument</option>
 </select>
-        <div id="swatch" class="swatch"></div>
-      </label>
-      <label>Face
-        <select id="face"><option value="left">Left</option><option value="right">Right</option></select>
-      </label>
-    </div>
-    <div class="row">
-      <label>CODE <input id="code" placeholder="e.g. A3"></label>
-      <label>Quantity <input id="qty" type="number" value="1"></label>
-    </div>
-    <label>Notes <textarea id="notes" rows="3" placeholder="Any special instructions..."></textarea></label>
-    <hr>
-    <div class="small">Tip: Dot Mode = tap to add points. Tap labels to edit lengths/angles. Lock to select/edit.</div>
+      <div id="swatch" class="swatch"></div>
+    </label>
+    <label>Face
+      <select id="face"><option value="left">Left</option><option value="right">Right</option></select>
+    </label>
   </div>
-
   <div class="stage">
-    <canvas id="cv" width="1300" height="820"></canvas>
+    <canvas id="cv" width="1200" height="700"></canvas>
     <div id="overlay"></div>
   </div>
 </div>
-
 <script>
 const cv=document.getElementById('cv'),ctx=cv.getContext('2d');
 const overlay=document.getElementById('overlay');
 const colourSel=document.getElementById('colour'), swatch=document.getElementById('swatch');
-const faceSel=document.getElementById('face');
-const qtyEl=document.getElementById('qty'), codeEl=document.getElementById('code');
-const nameEl=document.getElementById('name'), lenEl=document.getElementById('lenmm'), gaugeEl=document.getElementById('gauge'), notesEl=document.getElementById('notes');
-
 swatch.style.background=colourSel.value; colourSel.onchange=()=>swatch.style.background=colourSel.value;
+const faceSel=document.getElementById('face');
 
 let Z=1, pxPerMm=1, snap=6, locked=false;
 let path=[], history=[], redoStack=[], dotMode=true, hoverPos=null;
 
-// ---------- helpers ----------
-function push(){ history.push(JSON.stringify(path)); if(history.length>200)history.shift(); redoStack.length=0; }
-function undo(){ if(history.length){ redoStack.push(JSON.stringify(path)); path=JSON.parse(history.pop()); draw(); }}
-function redo(){ if(redoStack.length){ history.push(JSON.stringify(path)); path=JSON.parse(redoStack.pop()); draw(); }}
-function pos(e){ const r=cv.getBoundingClientRect();
-  const x=((e.touches?e.touches[0].clientX:e.clientX)-r.left)/Z;
-  const y=((e.touches?e.touches[0].clientY:e.clientY)-r.top)/Z;
-  return {x,y};
-}
-function snapP(p){ if(!snap) return p; return {x:Math.round(p.x*snap)/snap, y:Math.round(p.y*snap)/snap}; }
-function segs(){ const s=[]; for(let i=0;i<path.length-1;i++) s.push([path[i],path[i+1],i]); return s; }
-function normal(ax,ay,bx,by){ const dx=bx-ax,dy=by-ay; const L=Math.hypot(dx,dy)||1; return {x:-dy/L,y:dx/L}; }
-function cornerAngle(prev,pt,next){
-  const v1={x:prev.x-pt.x,y:prev.y-pt.y}, v2={x:next.x-pt.x,y:next.y-pt.y};
-  const dot=v1.x*v2.x+v1.y*v2.y, l1=Math.hypot(v1.x,v1.y), l2=Math.hypot(v2.x,v2.y);
-  if(l1*l2===0) return 0;
-  let ang=Math.acos(Math.max(-1,Math.min(1,dot/(l1*l2)))); // rad
-  return +(Math.min(ang*180/Math.PI,180)).toFixed(1);
-}
-function girdle(){ // total girth (sum of segment lengths in mm)
-  let mm=0; for(let i=0;i<path.length-1;i++){ const a=path[i],b=path[i+1]; mm+=Math.hypot(b.x-a.x,b.y-a.y)/pxPerMm; }
-  return Math.round(mm);
-}
-function folds(){ return Math.max(0, path.length-2); } // internal corners count
-function roundRect(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);
-  ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);
-  ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);}
-function drawBadge(x,y,text,bg='#d00'){ ctx.font=(12)+'px system-ui,-apple-system';
-  const w=ctx.measureText(text).width+12,h=18;
-  ctx.fillStyle=bg; roundRect(ctx,x-w/2,y-h/2,w,h,9); ctx.fill();
-  ctx.fillStyle='#fff'; ctx.fillText(text,x-w/2+6,y+4);
-}
+// helpers
+function push(){history.push(JSON.stringify(path)); if(history.length>200)history.shift(); redoStack.length=0;}
+function undo(){if(history.length){redoStack.push(JSON.stringify(path)); path=JSON.parse(history.pop()); draw();}}
+function redo(){if(redoStack.length){history.push(JSON.stringify(path)); path=JSON.parse(redoStack.pop()); draw();}}
+function pos(e){const r=cv.getBoundingClientRect(); const x=((e.touches?e.touches[0].clientX:e.clientX)-r.left)/Z; const y=((e.touches?e.touches[0].clientY:e.clientY)-r.top)/Z; return {x,y};}
+function snapP(p){if(!snap)return p; return {x:Math.round(p.x*snap)/snap,y:Math.round(p.y*snap)/snap};}
+function segs(){const s=[]; for(let i=0;i<path.length-1;i++) s.push([path[i],path[i+1],i]); return s;}
+function normal(ax,ay,bx,by){const dx=bx-ax,dy=by-ay; const L=Math.hypot(dx,dy)||1; return {x:-dy/L,y:dx/L};}
+function cornerAngle(prev,pt,next){const v1={x:prev.x-pt.x,y:prev.y-pt.y}, v2={x:next.x-pt.x,y:next.y-pt.y}; const dot=v1.x*v2.x+v1.y*v2.y, l1=Math.hypot(v1.x,v1.y), l2=Math.hypot(v2.x,v2.y); if(l1*l2===0)return 0; let ang=Math.acos(Math.max(-1,Math.min(1,dot/(l1*l2)))); return +(Math.min(ang*180/Math.PI,180)).toFixed(1);}
+function roundRect(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);}
+function drawBadge(x,y,text){ctx.font='12px system-ui,-apple-system'; const w=ctx.measureText(text).width+12,h=18; ctx.fillStyle='#d00'; roundRect(ctx,x-w/2,y-h/2,w,h,9); ctx.fill(); ctx.fillStyle='#fff'; ctx.fillText(text,x-w/2+6,y+4);}
 
-// ---------- draw ----------
+// draw
 function draw(){
   ctx.clearRect(0,0,cv.width,cv.height);
   if(!path.length) return;
-
   ctx.save(); ctx.scale(Z,Z);
-
-  // main path
-  ctx.strokeStyle='#000'; ctx.lineWidth=2/Z;
-  ctx.beginPath(); ctx.moveTo(path[0].x,path[0].y);
-  for(let i=1;i<path.length;i++) ctx.lineTo(path[i].x,path[i].y);
-  ctx.stroke();
-
-  // coloured face offset
+  ctx.strokeStyle='#000'; ctx.lineWidth=2/Z; ctx.beginPath(); ctx.moveTo(path[0].x,path[0].y); for(let i=1;i<path.length;i++) ctx.lineTo(path[i].x,path[i].y); ctx.stroke();
   ctx.globalAlpha=.35; ctx.strokeStyle=colourSel.value; ctx.lineWidth=6/Z;
-  for(let i=0;i<path.length-1;i++){ const a=path[i],b=path[i+1]; const n=normal(a.x,a.y,b.x,b.y);
-    const off = (faceSel.value==='left'?6:-6);
-    ctx.beginPath(); ctx.moveTo(a.x+n.x*off, a.y+n.y*off); ctx.lineTo(b.x+n.x*off, b.y+n.y*off); ctx.stroke();
-  }
+  for(let i=0;i<path.length-1;i++){const a=path[i],b=path[i+1]; const n=normal(a.x,a.y,b.x,b.y); const off=faceSel.value==='left'?6:-6; ctx.beginPath(); ctx.moveTo(a.x+n.x*off,a.y+n.y*off); ctx.lineTo(b.x+n.x*off,b.y+n.y*off); ctx.stroke();}
   ctx.globalAlpha=1;
-
-  // points
-  ctx.fillStyle='#000'; for(const p of path){ ctx.beginPath(); ctx.arc(p.x,p.y,3/Z,0,Math.PI*2); ctx.fill(); }
-
-  // angle arcs and labels (smallest arc)
-  const r=22; ctx.strokeStyle='#666'; ctx.setLineDash([4/Z,3/Z]); ctx.lineWidth=1/Z;
-  for(let i=1;i<path.length-1;i++){ const pm=path[i-1],p=path[i],pn=path[i+1];
-    let a1=Math.atan2(pm.y-p.y,pm.x-p.x), a2=Math.atan2(pn.y-p.y,pn.x-p.x);
-    let d=a2-a1; while(d>Math.PI){a2-=2*Math.PI; d=a2-a1;} while(d<-Math.PI){a2+=2*Math.PI; d=a2-a1;}
-    ctx.beginPath(); ctx.arc(p.x,p.y,r,a1,a2); ctx.stroke();
-  }
-  ctx.setLineDash([]);
-
-  ctx.restore();
-
-  // length labels (screen space so they remain readable)
-  for(let i=0;i<path.length-1;i++){ const a=path[i],b=path[i+1];
-    const L=Math.hypot(b.x-a.x,b.y-a.y)/pxPerMm;
-    drawBadge(((a.x+b.x)/2)*Z, ((a.y+b.y)/2)*Z, Math.round(L)+'', '#d00');
-  }
-  // angle labels
-  for(let i=1;i<path.length-1;i++){
-    const ang=cornerAngle(path[i-1],path[i],path[i+1]);
-    drawBadge(path[i].x*Z+10, path[i].y*Z-10, ang+'°', '#f60');
-  }
-
-  // rubber-band preview in dot mode
-  if(dotMode && hoverPos && path.length && !locked){
-    ctx.save(); ctx.scale(Z,Z);
-    const a=path[path.length-1], b=snapP(hoverPos);
-    ctx.setLineDash([6/Z,6/Z]); ctx.lineWidth=1.5/Z; ctx.strokeStyle='#888';
-    ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
-    ctx.restore();
-  }
+  ctx.fillStyle='#000'; for(const p of path){ctx.beginPath(); ctx.arc(p.x,p.y,3/Z,0,Math.PI*2); ctx.fill();}
+  const r=20; ctx.strokeStyle='#666'; ctx.setLineDash([4/Z,3/Z]); ctx.lineWidth=1/Z;
+  for(let i=1;i<path.length-1;i++){const pm=path[i-1],p=path[i],pn=path[i+1]; let a1=Math.atan2(pm.y-p.y,pm.x-p.x), a2=Math.atan2(pn.y-p.y,pn.x-p.x); let d=a2-a1; while(d>Math.PI){a2-=2*Math.PI; d=a2-a1;} while(d<-Math.PI){a2+=2*Math.PI; d=a2-a1;} ctx.beginPath(); ctx.arc(p.x,p.y,r,a1,a2); ctx.stroke();}
+  ctx.setLineDash([]); ctx.restore();
+  for(let i=0;i<path.length-1;i++){const a=path[i],b=path[i+1]; const L=Math.hypot(b.x-a.x,b.y-a.y)/pxPerMm; drawBadge(((a.x+b.x)/2)*Z,((a.y+b.y)/2)*Z,Math.round(L)+' mm');}
+  for(let i=1;i<path.length-1;i++){const ang=cornerAngle(path[i-1],path[i],path[i+1]); drawBadge(path[i].x*Z+10,path[i].y*Z-10,ang+'°');}
+  if(dotMode && hoverPos && path.length && !locked){ ctx.save(); ctx.scale(Z,Z); const a=path[path.length-1], b=snapP(hoverPos); ctx.setLineDash([6/Z,6/Z]); ctx.lineWidth=1.5/Z; ctx.strokeStyle='#888'; ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke(); ctx.restore(); }
 }
-
-// ---------- on-canvas inline editor ----------
-function clearInline(){ overlay.innerHTML=''; }
-function showInline(x,y,value,onEnter){
-  clearInline();
-  const w=document.createElement('div'); w.className='inline-input'; w.style.left=x+'px'; w.style.top=y+'px';
-  const inp=document.createElement('input'); inp.type='number'; inp.value=value; w.appendChild(inp);
-  overlay.appendChild(w); inp.focus(); inp.select();
-  inp.addEventListener('keydown',ev=>{
-    if(ev.key==='Enter'){ onEnter(parseFloat(inp.value)); clearInline(); draw(); }
-    if(ev.key==='Escape'){ clearInline(); draw(); }
-  });
+// inline editor
+function clearInline(){overlay.innerHTML='';}
+function showInline(x,y,value,onEnter){clearInline(); const w=document.createElement('div'); w.className='inline-input'; w.style.left=x+'px'; w.style.top=y+'px'; const inp=document.createElement('input'); inp.type='number'; inp.value=value; w.appendChild(inp); overlay.appendChild(w); inp.focus(); inp.select(); inp.addEventListener('keydown',ev=>{ if(ev.key==='Enter'){ onEnter(parseFloat(inp.value)); clearInline(); draw(); } if(ev.key==='Escape'){ clearInline(); draw(); } });}
+function pickAtScreen(sp){let bestKind=null,bestIndex=-1,bestd=1e9,bx=0,by=0;
+  segs().forEach(([a,b,i])=>{const mx=(a.x+b.x)/2*Z,my=(a.y+b.y)/2*Z; const d=Math.hypot(sp.x-mx,sp.y-my); if(d<bestd){bestd=d;bestKind='seg';bestIndex=i;bx=mx;by=my;}});
+  for(let i=1;i<path.length-1;i++){const px=path[i].x*Z+10,py=path[i].y*Z-10; const d=Math.hypot(sp.x-px,sp.y-py); if(d<bestd){bestd=d;bestKind='corner';bestIndex=i;bx=px;by=py;}}
+  if(bestd>48) return;
+  if(bestKind==='seg'){const a=path[bestIndex],b=path[bestIndex+1]; const dx=b.x-a.x,dy=b.y-a.y; const len=Math.hypot(dx,dy)/pxPerMm; showInline(bx,by,Math.round(len),(newLen)=>{const ang=Math.atan2(-dy,dx); const m=(newLen||0)*pxPerMm; path[bestIndex+1]={x:a.x+m*Math.cos(ang), y:a.y-m*Math.sin(ang)}; draw();});}
+  else{const ang=cornerAngle(path[bestIndex-1],path[bestIndex],path[bestIndex+1]); showInline(bx,by,ang,(newAng)=>applyCorner(bestIndex,parseFloat(newAng||ang)));}
 }
+function applyCorner(i,deg){if(path.length<3)return; i=Math.max(1,Math.min(i,path.length-2)); const desired=Math.max(0,Math.min(180,deg))*Math.PI/180; const Pm=path[i-1],P=path[i],Pn=path[i+1]; const vPrev={x:P.x-Pm.x,y:P.y-Pm.y}, thetaPrev=Math.atan2(vPrev.y,vPrev.x); const delta=Math.PI-desired; const cur=Math.atan2(Pn.y-P.y,Pn.x-P.x); const wrap=t=>Math.atan2(Math.sin(t),Math.cos(t)); const opt1=thetaPrev+delta,opt2=thetaPrev-delta; const theta=(Math.abs(wrap(cur-opt1))<=Math.abs(wrap(cur-opt2)))?opt1:opt2; const L=Math.hypot(Pn.x-P.x,Pn.y-P.y); path[i+1]={x:P.x+L*Math.cos(theta), y:P.y+L*Math.sin(theta)}; draw();}
 
-// edit: click nearest segment midpoint or angle bubble
-function pickAtScreen(sp){
-  let bestKind=null,bestIndex=-1,bestd=1e9,bx=0,by=0;
-  // segments
-  segs().forEach(([a,b,i])=>{ const mx=(a.x+b.x)/2*Z,my=(a.y+b.y)/2*Z;
-    const d=Math.hypot(sp.x-mx,sp.y-my); if(d<bestd){bestd=d;bestKind='seg';bestIndex=i;bx=mx;by=my;} });
-  // corners
-  for(let i=1;i<path.length-1;i++){ const px=path[i].x*Z+10, py=path[i].y*Z-10;
-    const d=Math.hypot(sp.x-px,sp.y-py); if(d<bestd){bestd=d;bestKind='corner';bestIndex=i;bx=px;by=py;} }
-  if(bestd>56) return; // too far
-
-  if(bestKind==='seg'){
-    const a=path[bestIndex], b=path[bestIndex+1];
-    const dx=b.x-a.x, dy=b.y-a.y; const len=Math.hypot(dx,dy)/pxPerMm;
-    showInline(bx,by,Math.round(len),(newLen)=>{
-      const ang=Math.atan2(-dy,dx); const m=(newLen||0)*pxPerMm;
-      path[bestIndex+1]={x:a.x+m*Math.cos(ang), y:a.y-m*Math.sin(ang)};
-      draw();
-    });
-  } else {
-    const ang=cornerAngle(path[bestIndex-1],path[bestIndex],path[bestIndex+1]);
-    showInline(bx,by,ang,(newAng)=>applyCorner(bestIndex,parseFloat(newAng||ang)));
-  }
+// events
+function onDown(e){const p=pos(e); const sp=snapP(p); if(locked){pickAtScreen({x:p.x*Z,y:p.y*Z}); e.preventDefault(); return;}
+  if(dotMode){ if(!path.length){push(); path=[sp];} else{push(); path.push(sp);} draw(); e.preventDefault(); return; }
+  push(); path=[sp]; cv.onpointermove=ev=>{ path[path.length-1]=snapP(pos(ev)); draw(); }; e.preventDefault();
 }
+function onMove(e){hoverPos=pos(e); draw();}
+function onUp(e){cv.onpointermove=null;}
+cv.addEventListener('pointerdown',onDown,{passive:false});
+cv.addEventListener('pointermove',onMove,{passive:false});
+cv.addEventListener('pointerup',onUp,{passive:false});
 
-// adjust next segment to hit requested internal angle (<=180)
-function applyCorner(i,deg){
-  if(path.length<3) return;
-  i=Math.max(1,Math.min(i,path.length-2));
-  const desired=Math.max(0,Math.min(180,deg))*Math.PI/180;
-  const Pm=path[i-1], P=path[i], Pn=path[i+1];
-  const vPrev={x:P.x-Pm.x,y:P.y-Pm.y}; const thetaPrev=Math.atan2(vPrev.y,vPrev.x);
-  const delta=Math.PI-desired; // interior angle relation
-  const cur=Math.atan2(Pn.y-P.y,Pn.x-P.x);
-  const wrap = (t)=>Math.atan2(Math.sin(t),Math.cos(t));
-  const opt1=thetaPrev+delta, opt2=thetaPrev-delta;
-  const theta = Math.abs(wrap(cur-opt1)) <= Math.abs(wrap(cur-opt2)) ? opt1 : opt2;
-  const L=Math.hypot(Pn.x-P.x,Pn.y-P.y);
-  path[i+1]={x:P.x+L*Math.cos(theta), y:P.y+L*Math.sin(theta)};
-  draw();
-}
-
-// ---------- interactions ----------
-function onDown(e){
-  const p=pos(e);
-  const sp=snapP(p);
-  if(locked) { pickAtScreen({ x:p.x*Z, y:p.y*Z }); e.preventDefault(); return; }
-
-  if(dotMode){
-    if(!path.length){ push(); path=[sp]; }
-    else { push(); path.push(sp); }
-    draw();
-    e.preventDefault();
-    return;
-  }
-
-  // fallback drag mode if dotMode is off
-  push(); path=[sp];
-  cv.onpointermove=(ev)=>{ path[path.length-1]=snapP(pos(ev)); draw(); };
-  e.preventDefault();
-}
-function onMove(e){ hoverPos=pos(e); draw(); }
-function onUp(e){ cv.onpointermove=null; }
-
-cv.addEventListener('pointerdown', onDown, {passive:false});
-cv.addEventListener('pointermove', onMove, {passive:false});
-cv.addEventListener('pointerup', onUp, {passive:false});
-
-// ---------- controls ----------
-document.getElementById('new').onclick=()=>{ if(path.length>1 && !confirm('Clear drawing?')) return; path=[]; history.length=0; redoStack.length=0; draw(); };
+// controls
+document.getElementById('new').onclick=()=>{ if(path.length>1 && !confirm('Clear drawing?'))return; path=[]; history.length=0; redoStack.length=0; draw(); };
 document.getElementById('lock').onclick=()=>{ locked=!locked; document.getElementById('lock').textContent=locked?'🔓 Unlock':'🔒 Lock'; };
 document.getElementById('undo').onclick=undo; document.getElementById('redo').onclick=redo;
 document.getElementById('dot').onclick=()=>{ dotMode=!dotMode; const b=document.getElementById('dot'); b.textContent='Dot Mode: '+(dotMode?'ON':'OFF'); b.classList.toggle('primary',dotMode); };
 document.getElementById('zoom').oninput=e=>{ Z=parseFloat(e.target.value||'1'); draw(); };
 document.getElementById('scale').onchange=e=>{ pxPerMm=parseFloat(e.target.value||'1'); draw(); };
 document.getElementById('snap').onchange=e=>{ snap=parseInt(e.target.value||'0'); };
-
-document.getElementById('exportPNG').onclick=()=>{
-  const a=document.createElement('a'); a.href=cv.toDataURL('image/png'); a.download='mr-flashing.png'; a.click();
-};
-
-// ---------- Order PDF (printable A4) ----------
-document.getElementById('orderPDF').onclick=()=>{
-  if(!path.length){ alert('Draw your flashing first.'); return; }
-  // make a small preview image
-  const tmp=document.createElement('canvas'); tmp.width=900; tmp.height=600;
-  const tctx=tmp.getContext('2d'); tctx.fillStyle='#fff'; tctx.fillRect(0,0,tmp.width,tmp.height);
-  // fit drawing bounds
-  let minx=1e9,miny=1e9,maxx=-1e9,maxy=-1e9;
-  for(const p of path){ minx=Math.min(minx,p.x); miny=Math.min(miny,p.y); maxx=Math.max(maxx,p.x); maxy=Math.max(maxy,p.y); }
-  const pad=40; const W=maxx-minx||1, H=maxy-miny||1;
-  const s=Math.min((tmp.width-2*pad)/W,(tmp.height-2*pad)/H);
-  tctx.save(); tctx.translate(pad, pad); tctx.scale(s, s); tctx.translate(-minx, -miny);
-  // grid
-  tctx.strokeStyle='#e9eef3'; tctx.lineWidth=1/s;
-  for(let x=Math.floor(minx); x<=Math.ceil(maxx); x+=24){ tctx.beginPath(); tctx.moveTo(x,miny-2000); tctx.lineTo(x,maxy+2000); tctx.stroke(); }
-  for(let y=Math.floor(miny); y<=Math.ceil(maxy); y+=24){ tctx.beginPath(); tctx.moveTo(minx-2000,y); tctx.lineTo(maxx+2000,y); tctx.stroke(); }
-  // path
-  tctx.strokeStyle='#000'; tctx.lineWidth=2/s; tctx.beginPath(); tctx.moveTo(path[0].x,path[0].y); for(let i=1;i<path.length;i++) tctx.lineTo(path[i].x,path[i].y); tctx.stroke();
-  // colour face
-  function normal(ax,ay,bx,by){ const dx=bx-ax,dy=by-ay; const L=Math.hypot(dx,dy)||1; return {x:-dy/L,y:dx/L}; }
-  tctx.globalAlpha=.35; tctx.strokeStyle=colourSel.value; tctx.lineWidth=6/s;
-  for(let i=0;i<path.length-1;i++){ const a=path[i],b=path[i+1]; const n=normal(a.x,a.y,b.x,b.y); const off=(faceSel.value==='left'?6:-6); tctx.beginPath(); tctx.moveTo(a.x+n.x*off,a.y+n.y*off); tctx.lineTo(b.x+n.x*off,b.y+n.y*off); tctx.stroke(); }
-  tctx.restore();
-  const imgURL = tmp.toDataURL('image/png');
-
-  const colourName = colourSel.options[colourSel.selectedIndex].text;
-  const q = parseInt(qtyEl.value||'1');
-  const Lmm = parseInt(lenEl.value||'0');
-  const g = girdle();
-  const f = folds();
-  const code = (codeEl.value||'').trim();
-  const gauge = (gaugeEl.value||'').trim();
-
-  const html = `
-  <html><head><meta charset="utf-8"><title>Order — MR Flashing</title>
-  <style>
-    @page{size:A4;margin:16mm}
-    body{font-family:-apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;margin:0;color:#111}
-    h1{font-size:18px;margin:0 0 8px 0} h2{font-size:14px;margin:12px 0 6px}
-    .muted{color:#666;font-size:12px}
-    table{width:100%;border-collapse:collapse;margin:8px 0}
-    th,td{border:1px solid #d9e0e6;padding:6px 8px;font-size:12px;text-align:left}
-    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:6px}
-    .box{border:1px solid #d9e0e6;border-radius:8px;padding:10px}
-    .row{display:flex;justify-content:space-between;font-size:12px;margin:2px 0}
-    .bullet{margin:6px 0 0 16px;font-size:12px;color:#333}
-    .imgwrap{border:1px solid #e1e6eb;border-radius:8px;padding:8px;text-align:center}
-    .tag{display:inline-block;background:#d00;color:#fff;border-radius:999px;padding:2px 8px;font-size:11px;margin-left:6px}
-  </style></head>
-  <body>
-    <h1>PREVIEW ORDER <span class="tag">${code?code:''}</span></h1>
-    <div class="bullet">
-      • Arrow points to the (solid) coloured side<br>
-      • 90° degrees are not labelled<br>
-      • F = Number of internal folds
-    </div>
-
-    <table>
-      <tr><th>#</th><th>Colour / Material</th><th>CODE</th><th>F</th><th>GIRTH</th></tr>
-      <tr><td>1</td><td>${colourName} (${gauge}mm)</td><td>${code||''}</td><td>${f}</td><td>${g}</td></tr>
-    </table>
-
-    <div class="row" style="font-size:12px;margin:6px 0">
-      <div>Q x L: ${q} × ${Lmm.toLocaleString()} mm</div>
-      <div>T (est.): ${(g/1000).toFixed(1)}</div>
-    </div>
-
-    <div class="grid">
-      <div class="imgwrap"><img src="${imgURL}" style="max-width:100%;height:auto"></div>
-      <div class="box">
-        <div class="row"><b>Job:</b><span>${nameEl.value}</span></div>
-        <div class="row"><b>Qty × Length:</b><span>${q} × ${Lmm} mm</span></div>
-        <div class="row"><b>Colour / Face:</b><span>${colourName} / ${faceSel.value}</span></div>
-        <div class="row"><b>Gauge:</b><span>${gauge}</span></div>
-        <div class="row"><b>Girth (mm):</b><span>${g}</span></div>
-        <div class="row"><b>Folds:</b><span>${f}</span></div>
-        <div class="row"><b>Code:</b><span>${code||'—'}</span></div>
-        <h2>Notes</h2>
-        <div class="muted">${(notesEl.value||'').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>')}</div>
-      </div>
-    </div>
-
-    <script>window.print()</script>
-  </body></html>`;
-
-  const w=window.open('about:blank');
-  w.document.open(); w.document.write(html); w.document.close();
-};
-
-// init
+document.getElementById('exportPNG').onclick=()=>{ const a=document.createElement('a'); a.href=cv.toDataURL('image/png'); a.download='mr-flashing.png'; a.click(); };
 draw();
 </script>
 </body>
